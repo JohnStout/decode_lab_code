@@ -19,11 +19,10 @@ class caiman_process:
         self.frate = frate
         self.movieFrames = cm.load_movie_chain(self.fname,fr=self.frate) # frame rate = 30f/s
 
-    def start_cluster(self):
         # start a cluster for parallel processing (if a cluster already exists it will be closed and a new session will be opened)
         if 'dview' in locals():
             cm.stop_server(dview=dview)
-        c, dview, n_processes = cm.cluster.setup_cluster(
+        self.c, self.dview, self.n_processes = cm.cluster.setup_cluster(
             backend='local', n_processes=None, single_thread=False)
         
     def watch_movie(self):
@@ -31,6 +30,10 @@ class caiman_process:
         downsample_ratio = .2  # motion can be perceived better when downsampling in time
         self.movieFrames.resize(1, 1, downsample_ratio).play(q_max=99.5, fr=self.frate, magnification=0.5)   # play movie (press q to exit)   
 
+    def get_frames(self): 
+        movieFrames = self.movieFrames
+        return movieFrames
+    
     def motion_correct(self, motion_correct: bool):
 
         # Set parameters
@@ -85,8 +88,8 @@ class caiman_process:
                                     border_to_0=bord_px)
         else:  # if no motion correction just memory map the file
             bord_px = 0 if border_nan == 'copy' else bord_px
-            fname_new = cm.save_memmap(fname, base_name='memmap_',
-                                    order='C', border_to_0=0, dview=dview)
+            fname_new = cm.save_memmap(self.fname, base_name='memmap_',
+                                    order='C', border_to_0=0, dview=self.dview)
         self.fname_new = fname_new
 
         # load memory mappable file
