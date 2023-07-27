@@ -1,0 +1,24 @@
+Metadata-Version: 2.1
+Name: decode-lab-code
+Version: 0.1
+Summary: A python toolbox to support data analysis pipeline in the DECODE lab at Nemours Childrens Hospital, led by A.Hernan and R.Scott
+Home-page: https://github.com/JohnStout/decode_lab_code
+Download-URL: https://github.com/JohnStout/decode_lab_code
+Author: John Stout
+Author-email: john.j.stout.jr@gmail.com
+License: GNU General Public License v3
+Keywords: neuroscience
+Classifier: Development Status :: 0.1
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: NA
+Classifier: Natural Language :: English
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# decode_lab_code
+ A python toolbox to support analyses performed in the DECODE lab at Nemours Childrens Hospital in Wilmington DE, led by A.Hernan and R.Scott

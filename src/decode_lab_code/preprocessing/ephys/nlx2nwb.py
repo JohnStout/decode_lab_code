@@ -91,3 +91,16 @@ class interfaceNLX:
         return nwbfile 
     
     # add a component to test the NWB file for critical failures
+
+
+#from neo import NeuralynxIO
+
+#io=NeuralynxIO(dirname='/Users/js0403/Sample-data')
+#io
+# what methods th
+#io.get_analogsignal_chunk()
+
+#nvtOpen = open(folder_path+'/VT1.nvt','rb')
+#nvtRead = nvtOpen.read()
+#nvtRead[:]
+#type(nvtOpen)
