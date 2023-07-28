@@ -12,11 +12,12 @@
 import caiman as cm
 import os
 import tifffile as tiff
+import numpy as np
 
 # interface with user
-loadFolder = input("Please enter the directory to load data: ")
+loadFolder = input("Please enter the directory to data: ")
 fileName   = input("Please enter the file name, include the file type: ")
-saveFolder = input("Please enter the directory to save data: ")
+frate      = float(input("Please enter the frame rate: "))
 
 # Split 2-dye calcium imaging videos and save separately
 #loadFolder = '/Users/js0403/caiman_data/example_movies'
@@ -25,35 +26,26 @@ path_movie = [os.path.join(loadFolder, fileName)]
 print("loading movie...")
 m_orig = cm.load_movie_chain(path_movie, is3D=True)
 m_temp = m_orig[:,1,:,:]
-frate = 10
 downsample_ratio = .2
 m_temp.resize(1, 1, downsample_ratio).play(q_max=99.5, fr=frate, magnification=0.5)   # play movie (press q to exit)
-
-# enter which channel is which
-channel1 = input("Enter name for channel1: ")
-channel2 = input("Enter name for channel2: ")
 
 # extract movies
 m_ch1 = m_orig[:,0,:,:]
 m_ch2 = m_orig[:,1,:,:]
 
-# save videos
-path_ch1 = os.path.join(saveFolder,channel1+'_'+fileName)
-path_ch2 = os.path.join(saveFolder,channel2+'_'+fileName)
-print("Saving as", path_ch1)
-print("Saving as", path_ch2)
-
 # play the videos
-frate = float(input("Enter the framerate: "))
 downsample_ratio = .2  # motion can be perceived better when downsampling in time
 m_ch1.resize(1, 1, downsample_ratio).play(q_max=99.5, fr=frate, magnification=0.5)   # play movie (press q to exit)
-userConfirm = input("Does this video look okay? [y/n]: ")
-if userConfirm == 'y':
-    tiff.imsave(path_ch1,m_ch1)
+# enter which channel is which
+channel1 = input("Enter name for channel1: ")
+path_ch1 = os.path.join(loadFolder,channel1+'_'+fileName)
+print("Saving as", path_ch1)
+tiff.imsave(path_ch1,m_ch1)
 
 m_ch2.resize(1, 1, downsample_ratio).play(q_max=99.5, fr=frate, magnification=0.5)   # play movie (press q to exit)
-userConfirm = input("Does this video look okay? [y/n]: ")
-if userConfirm == 'y':
-    tiff.imsave(path_ch2,m_ch2)
+channel2 = input("Enter name for channel2: ")
+path_ch2 = os.path.join(loadFolder,channel2+'_'+fileName)
+tiff.imsave(path_ch2,m_ch2)
+print("Saving as", path_ch2)
 
 print("Split complete")
