@@ -15,19 +15,22 @@ import numpy as np
 # parent class
 class caiman_preprocess:
 
-    def __init__(self, folder_name: str, file_name: str, frate: int):
+    def __init__(self, folder_name: str, file_name: str, frate: int, activate_cluster: bool):
         self.fname = [download_demo(file_name,folder_name)]
         self.frate = frate
+        print("Loading movie")
         self.movieFrames = cm.load_movie_chain(self.fname,fr=self.frate) # frame rate = 30f/s
 
-        # start a cluster for parallel processing (if a cluster already exists it will be closed and a new session will be opened)
-        if 'dview' in locals():
-            cm.stop_server(dview=dview)
-        # n_processes reflect cluster num
-        print("cluster set-up")
-        self.c, self.dview, self.n_processes = cm.cluster.setup_cluster(
-            backend='local', n_processes=None, single_thread=False)
-        
+        # this actually doesn't function without activating the cluster
+        if activate_cluster:            
+            # start a cluster for parallel processing (if a cluster already exists it will be closed and a new session will be opened)
+            if 'dview' in locals():
+                cm.stop_server(dview=dview)
+            # n_processes reflect cluster num
+            print("cluster set-up")
+            self.c, self.dview, self.n_processes = cm.cluster.setup_cluster(
+                backend='local', n_processes=None, single_thread=False)
+
     def get_init_vars(self):
         init_dict = {
             'fname': self.fname,

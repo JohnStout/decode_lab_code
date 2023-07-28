@@ -23,7 +23,8 @@ requirements = [
         'rich',
         'pynapple',
         'neuroconv',
-        'dandi'
+        'dandi',
+        'caiman'
         ]
 
 setup(
