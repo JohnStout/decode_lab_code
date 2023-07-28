@@ -8,10 +8,6 @@ from pynwb.behavior import Position, SpatialSeries
 from pynwb.epoch import TimeIntervals
 from pynwb.file import Subject
 
-
-from datetime import datetime
-from uuid import uuid4
-
 import matplotlib.pyplot as plt
 import numpy as np
 from dateutil.tz import tzlocal
@@ -67,17 +63,63 @@ cp = caiman_preprocess(folder_name,fname_neuron,frame_rate,False)
 # lets load in 
 data = cp.get_frames()
 
-time_series_with_rate = TimeSeries(
-    name="ophys",
-    data=data,
-    unit="pixels",
-    starting_time=0.0,
-    # I'm not sure if this is numsamples/sec or sec/numsamples
-    rate=frame_rate, # sampled every second (make sure this is correct***)
-)
-time_series_with_rate
-nwbfile.add_acquisition(time_series_with_rate)
+# working on getting the real ophys way working. nwbwidgets spits an error
+ophys_prep = 1
+if ophys_prep == 1:
+    # create device
+    device = nwbfile.create_device(
+        name="Microscope",
+        description="My two-photon microscope",
+        manufacturer="The best microscope manufacturer",
+    )
+    optical_channel = OpticalChannel(
+        name="OpticalChannel",
+        description="an optical channel",
+        emission_lambda=525.0,
+    )
 
-# write
-with NWBHDF5IO(folder_name+"/data_nwb.nwb", "w") as io:
-    io.write(nwbfile)
+    # create imagingplane object
+    imaging_plane = nwbfile.create_imaging_plane(
+        name="ImagingPlane",
+        optical_channel=optical_channel,
+        imaging_rate=frame_rate,
+        description="Activation of cells",
+        device=device,
+        excitation_lambda=600.0,
+        indicator="GFP",
+        location="Somewhere",
+        grid_spacing=[0.01, 0.01],
+        grid_spacing_unit="meters",
+        origin_coords=[1.0, 2.0, 3.0],
+        origin_coords_unit="meters",
+    )
+
+    # using internal data. this data will be stored inside the NWB file
+    one_p_series1 = OnePhotonSeries(
+        name="CalciumDye",
+        data=data,
+        imaging_plane=imaging_plane,
+        rate=10.0,
+        unit="pixels",
+    )
+
+    nwbfile.add_acquisition(one_p_series1)
+    with NWBHDF5IO(folder_name+"/data_ophys_nwb.nwb", "w") as io:
+        io.write(nwbfile)
+
+else:
+    # time series option
+    time_series_with_rate = TimeSeries(
+        name="ophys",
+        data=data,
+        unit="pixels",
+        starting_time=0.0,
+        # I'm not sure if this is numsamples/sec or sec/numsamples
+        rate=frame_rate, # sampled every second (make sure this is correct***)
+    )
+    time_series_with_rate
+    nwbfile.add_acquisition(time_series_with_rate)
+
+    # write
+    with NWBHDF5IO(folder_name+"/data_nwb.nwb", "w") as io:
+        io.write(nwbfile)
