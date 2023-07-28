@@ -25,6 +25,8 @@ path_movie = [os.path.join(loadFolder, fileName)]
 print("loading movie...")
 m_orig = cm.load_movie_chain(path_movie, is3D=True)
 m_temp = m_orig[:,1,:,:]
+frate = 10
+downsample_ratio = .2
 m_temp.resize(1, 1, downsample_ratio).play(q_max=99.5, fr=frate, magnification=0.5)   # play movie (press q to exit)
 
 # enter which channel is which

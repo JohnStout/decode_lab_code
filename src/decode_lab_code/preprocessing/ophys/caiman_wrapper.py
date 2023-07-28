@@ -23,11 +23,21 @@ class caiman_preprocess:
         # start a cluster for parallel processing (if a cluster already exists it will be closed and a new session will be opened)
         if 'dview' in locals():
             cm.stop_server(dview=dview)
+        # n_processes reflect cluster num
+        print("cluster set-up")
         self.c, self.dview, self.n_processes = cm.cluster.setup_cluster(
             backend='local', n_processes=None, single_thread=False)
         
-    def get_cluster_vars(self):
-        return self.n_processes, self.c, self.dview
+    def get_init_vars(self):
+        init_dict = {
+            'fname': self.fname,
+            'frame_rate': self.frate,
+            'frame_data': self.movieFrames,
+            'cluster_processes (n_processes)': self.n_processes,
+            'ipyparallel.Client_object': self.c,
+            'ipyparallel_dview_object': self.dview
+        }
+        return init_dict
         
     def watch_movie(self):
         # playback
@@ -38,45 +48,16 @@ class caiman_preprocess:
         movieFrames = self.movieFrames
         return movieFrames
     
-    def motion_correct(self, motion_correct: bool):
-
-        # Set parameters
-
-        # default parameters
-        decay_time = 0.4 # length of a typical transient in seconds
-
-        # motion correction parameters - set to false for trevor/akanksha data
-        # motion_correct = False   # flag for performing motion correction 
-        pw_rigid = False         # flag for performing piecewise-rigid motion correction (otherwise just rigid)
-        gSig_filt = (3, 3)       # size of high pass spatial filtering, used in 1p data
-        max_shifts = (5, 5)      # maximum allowed rigid shift
-        strides = (48, 48)     # 48 start a new patch for pw-rigid motion correction every x pixels
-        overlaps = (24, 24)      # 24 overlap between pathes (size of patch strides+overlaps)
-        max_deviation_rigid = 3  # maximum deviation allowed for patch with respect to rigid shifts
-        border_nan = 'copy'      # replicate values along the boundaries
-
-        mc_dict = {
-            'fnames': self.fname,
-            'fr': self.frate,
-            'decay_time': decay_time,
-            'pw_rigid': pw_rigid,
-            'max_shifts': max_shifts,
-            'gSig_filt': gSig_filt,
-            'strides': strides,
-            'overlaps': overlaps,
-            'max_deviation_rigid': max_deviation_rigid,
-            'border_nan': border_nan,
-        }
-        opts = params.CNMFParams(params_dict=mc_dict)
+    def motion_correct(self, motion_correct: bool, opts):
 
         # Motion correction - don't need to worry about this much for Akanksha's dataset
         print("This might take a minute...")
         if motion_correct:
             # do motion correction rigid
-            mc = MotionCorrect(self.fname, dview=dview, **opts.get_group('motion'))
+            mc = MotionCorrect(self.fname, dview=self.dview, **opts.get_group('motion'))
             mc.motion_correct(save_movie=True)
-            fname_mc = mc.fname_tot_els if pw_rigid else mc.fname_tot_rig
-            if pw_rigid:
+            fname_mc = mc.fname_tot_els if opts.motion['pw_rigid'] else mc.fname_tot_rig
+            if opts.motion['pw_rigid']:
                 bord_px = np.ceil(np.maximum(np.max(np.abs(mc.x_shifts_els)),
                                             np.max(np.abs(mc.y_shifts_els)))).astype(int)
             else:
@@ -87,13 +68,11 @@ class caiman_preprocess:
                 plt.xlabel('frames')
                 plt.ylabel('pixels')
 
-            bord_px = 0 if border_nan == 'copy' else bord_px
+            bord_px = 0 if opts.motion['border_nan'] == 'copy' else bord_px
             fname_new = cm.save_memmap(fname_mc, base_name='memmap_', order='C',
                                     border_to_0=bord_px)
         else:  # if no motion correction just memory map the file
-            bord_px = 0 if border_nan == 'copy' else bord_px
+            bord_px = 0 if opts.motion['border_nan'] == 'copy' else bord_px
             fname_new = cm.save_memmap(self.fname, base_name='memmap_',
                                     order='C', border_to_0=0, dview=self.dview)
-            
-        return fname_new, opts
     
