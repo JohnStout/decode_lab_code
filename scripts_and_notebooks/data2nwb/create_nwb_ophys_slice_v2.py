@@ -1,3 +1,5 @@
+# This code will be a simple module for convering ophys to nwb
+
 # This code will generate an NWB file for ophys data
 from datetime import datetime
 from uuid import uuid4

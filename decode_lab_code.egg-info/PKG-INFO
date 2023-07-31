@@ -16,9 +16,15 @@ Classifier: Programming Language :: Python :: 3
 Classifier: Programming Language :: Python :: 3.8
 Classifier: Programming Language :: Python :: 3.9
 Classifier: Programming Language :: Python :: 3.10
+Classifier: Operating System :: MacOS :: MacOS X
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
 License-File: LICENSE
 
 # decode_lab_code
  A python toolbox to support analyses performed in the DECODE lab at Nemours Childrens Hospital in Wilmington DE, led by A.Hernan and R.Scott
+
+ This package is a work-in-progress and is in early development.
+
+ Analysis requires caiman and the NeuroConv environments. Future requirements will include docker and pynapple
+ 

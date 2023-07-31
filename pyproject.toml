@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "decode-lab-code"
+version = "0.1.0"
+description = "Python package to support data analysis pipelining in the DECODE lab @Nemours"
+authors = ["John Stout <john.j.stout.jr@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+spikeinterface = "^0.98.2"
+pynwb = "^2.4.0"
+dandi = "^0.55.1"
+numpy = "^1.25.2"
+scipy = "^1.11.1"
+pandas = "^2.0.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

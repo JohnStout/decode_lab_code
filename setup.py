@@ -2,7 +2,7 @@
 
 """The setup script."""
 
-from setuptools import setup, find_namespace_packages
+from setuptools import setup, find_namespace_packages, find_packages
 
 with open('README.md') as readme_file:
     readme = readme_file.read()
@@ -11,20 +11,11 @@ with open('README.md') as readme_file:
 #     history = history_file.read()
 
 requirements = [
-        'pandas>=1.0.3',
-        'numba>=0.46.0',
-        'numpy>=1.17.4',
-        'scipy>=1.3.2',
-        'pynwb',
-        'tabulate',
-        'h5py',
-        'tifffile',
-        'zarr',
-        'rich',
         'pynapple',
-        'neuroconv',
         'dandi',
-        'caiman'
+        'caiman',
+        'spikeinterface',
+        'pynwb'
         ]
 
 setup(
@@ -40,8 +31,10 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Operating System :: MacOS :: MacOS X'
     ],
     description="A python toolbox to support data analysis pipeline in the DECODE lab at Nemours Childrens Hospital, led by A.Hernan and R.Scott",
+    packages=find_packages(),
     install_requires=requirements,
     license="GNU General Public License v3",
     # long_description='pynapple is a Python library for analysing neurophysiological data. It allows to handle time series and epochs but also to use generic functions for neuroscience such as tuning curves and cross-correlogram of spikes. It is heavily based on neuroseries.' 
