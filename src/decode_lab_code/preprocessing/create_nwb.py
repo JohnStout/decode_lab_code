@@ -12,8 +12,7 @@ from pynwb.epoch import TimeIntervals
 from pynwb.file import Subject
 
 # added dependency
-from decode_lab_code.utils.util_funs import find
-from spikeinterface import extractors as ex
+#from decode_lab_code.utils.util_funs import find
 
 class nwbfile:
 
@@ -47,6 +46,9 @@ class nwbfile:
     
     # if working with ophys data, we need to get caiman functions online
     def add_ophys(self):
+
+        from spikeinterface import extractors as ex
+
         """
         This function relies on the following package:
             - caiman
@@ -205,7 +207,7 @@ class nwbfile:
 
         # ---- #
         # next, lets add our data to the nwb file
-        
+
         # ---- # 
         # next, lets filter and downsample our LFP data to add
 
