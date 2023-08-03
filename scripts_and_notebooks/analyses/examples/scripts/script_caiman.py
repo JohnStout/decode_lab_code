@@ -15,12 +15,29 @@ from decode_lab_code.preprocessing.ophys.caiman_wrapper import caiman_preprocess
 
 import matplotlib.pyplot as plt
 
-from caiman.source_extraction import cnmf
+import numpy as np
+
 import caiman as cm
+from caiman.source_extraction import cnmf
+from caiman.utils.utils import download_demo
+from caiman.utils.visualization import inspect_correlation_pnr, nb_inspect_correlation_pnr
 from caiman.motion_correction import MotionCorrect
 from caiman.source_extraction.cnmf import params as params
+from caiman.utils.visualization import plot_contours, nb_view_patches, nb_plot_contour
+import cv2
 
-import numpy as np
+try:
+    cv2.setNumThreads(0)
+except:
+    pass
+import bokeh.plotting as bpl
+import holoviews as hv
+bpl.output_notebook()
+
+try:
+    hv.notebook_extension('bokeh')
+except:
+    print("fail")
 
 #%%
 
@@ -45,7 +62,8 @@ plt.xlim(50, 100)
 plt.title("Neuron size ~= 10-13 pixels")
 
 # based on the visualization, 13 pixels is consistent with caiman
-neuron_size = 13 # pixels - this can be adjusted as needed after visualizing results
+# neuron_size = 13 # pixels - this can be adjusted as needed after visualizing results
+neuron_size = 20
 
 #%% lets identify a good patch size
 patch_size = 192; patch_overlap = patch_size/2
@@ -56,7 +74,7 @@ cp.test_patch_size(patch_size,patch_overlap)
 # dataset dependent parameters
 fname = cp.fname  # directory of data
 fr = frame_rate   # imaging rate in frames per second
-decay_time = 0.4  # length of a typical transient in seconds
+decay_time = 1  # length of a typical transient in seconds
 
 # motion correction parameters - we don't worry about mc
 motion_correct = False      # flag for motion correcting - we don't need to here
@@ -75,7 +93,7 @@ gnb = 2                     # number of global background components
 merge_thr = 0.85            # merging threshold, max correlation allowed
 rf = int(patch_size/2)         # half-size of the patches in pixels. e.g., if rf=25, patches are 50x50
 stride_cnmf = int(patch_size/4)  # amount of overlap between the patches in pixels
-K = 4                       # number of components per patch
+K = 5                       # number of components per patch
 gSiz = (neuron_size,neuron_size) # estimate size of neuron
 gSig = [int(round(neuron_size-1)/2), int(round(neuron_size-1)/2)] # expected half size of neurons in pixels
 method_init = 'corr_pnr'  # greedy_roi, initialization method (if analyzing dendritic data using 'sparse_nmf'), if 1p, use 'corr_pnr'
@@ -217,4 +235,81 @@ plt.title("PNR")
 cnm = cnmf.CNMF(n_processes=n_processes, dview=dview, Ain=None, params=opts)
 cnm.fit(images)
 
+# %%
+
+min_SNR = 4            # adaptive way to set threshold on the transient size
+r_values_min = 0.8    # threshold on space consistency (if you lower more components
+#                        will be accepted, potentially with worst quality)
+cnm.params.set('quality', {'min_SNR': min_SNR,
+                           'rval_thr': r_values_min,
+                           'use_cnn': False})
+
+# component evaluation
+cnm.estimates.evaluate_components(images, cnm.params, dview=dview)
+
+print(' ***** ')
+print('Number of total components: ', len(cnm.estimates.C))
+print('Number of accepted components: ', len(cnm.estimates.idx_components))
+
+# %%
+
+# plot some results
+cnm.estimates.plot_contours_nb(img=cn_filter, idx=cnm.estimates.idx_components)
+
+# %%
+
+include_background = False
+
+# Watch the video without the background in order to confirm results
+cnm.estimates.play_movie(images, q_max=99.9, magnification=2,
+                                 include_bck=include_background, gain_res=4, bpx=bord_px)
+
+# %%
+
+# This may only work in a notebook!
+
+# we need to identify our components for manual rejection
+#cnm.estimates.view_components(img=cn_filter,idx=cnm.estimates.idx_components)
+cnm.estimates.view_components(img=cn_filter,idx=cnm.estimates.idx_components[1:2])
+
+# %%
+
+# get df/f
+cnm.estimates.detrend_df_f(quantileMin=8, frames_window=250)
+
+# lets get the dF/F
+dfF_all = cnm.estimates.F_dff
+
+# get only good components
+dfF_good = dfF_all[cnm.estimates.idx_components]
+
+# get total time
+totalTime = dfF_good.shape[1]/frame_rate
+
+# make x-axis
+xAxis = np.linspace(0,totalTime,dfF_good.shape[1])
+
+"""
+fig = plt.figure(dpi=2000)
+ax = fig.add_subplot(dfF_good.shape[0],projection='3d')
+ax.set_xlabel('Time (sec)')
+ax.set_ylabel('norm. dF/F')
+ax.axis('off')
+for i in range(dfF_good.shape[0]):
+    line = ax.plot()
+"""
+
+fig = plt.figure(dpi=2000)
+gs  = fig.add_gridspec(dfF_good.shape[0], hspace=0)
+axs = gs.subplots(sharex=True, sharey=False)
+
+range(dfF_good.shape[0])
+for i in range(dfF_good.shape[0]):
+    axs[i].plot(xAxis,dfF_good[i,:],'k',linewidth=0.5)
+    axs[i].set_yticks([])
+    #axs[i].xticks(fontsize=8)       
+    if i != dfF_good.shape[0]-1:   
+        axs[i].axis('off')
+    else:
+        axs[i].set_frame_on(False)
 # %%
