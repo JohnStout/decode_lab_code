@@ -6,6 +6,9 @@
 # This in-vitro calcium imaging experiment is somewhere between 1p and 2p and 
 # therefore, the parameters must treat the data as such
 #
+# To estimates F0, 10th percentile of detrended signal
+#
+#
 # -JS
 
 #%% 
@@ -39,13 +42,16 @@ try:
 except:
     print("fail")
 
+import copy
+
 #%%
 
 # assign a folder name for analysis
 folder_name = '/Users/js0403/ophysdata/Trevor_750K2_200ms_RedGreen_depolar002'
-file_name = 'rec_neuron.tif'
+file_name = 'rec_neuron'
+extension = '.tif'
 frame_rate = 10
-cp = caiman_preprocess(folder_name,file_name,frame_rate,activate_cluster=False)
+cp = caiman_preprocess(folder_name,file_name+extension,frame_rate,activate_cluster=False)
 
 #%%
 
@@ -63,7 +69,7 @@ plt.title("Neuron size ~= 10-13 pixels")
 
 # based on the visualization, 13 pixels is consistent with caiman
 # neuron_size = 13 # pixels - this can be adjusted as needed after visualizing results
-neuron_size = 20
+neuron_size = 15
 
 #%% lets identify a good patch size
 patch_size = 192; patch_overlap = patch_size/2
@@ -74,7 +80,7 @@ cp.test_patch_size(patch_size,patch_overlap)
 # dataset dependent parameters
 fname = cp.fname  # directory of data
 fr = frame_rate   # imaging rate in frames per second
-decay_time = 1  # length of a typical transient in seconds
+decay_time = 0.4  # length of a typical transient in seconds
 
 # motion correction parameters - we don't worry about mc
 motion_correct = False      # flag for motion correcting - we don't need to here
@@ -112,7 +118,7 @@ min_pnr = 10                # min peak to noise ration from PNR image
 # parameters for component evaluation
 min_SNR = 2.0    # signal to noise ratio for accepting a component
 rval_thr = 0.85  # space correlation threshold for accepting a component
-cnn_thr = 0.99   # threshold for CNN based classifier
+cnn_thr = 0.99   # threshold for CNN based classifier, was 0.99
 cnn_lowest = 0.1 # neurons with cnn probability lower than this value are rejected
 
 # %%
@@ -190,7 +196,7 @@ c, dview, n_processes = cm.cluster.setup_cluster(
 #%% MEMORY MAPPING
 
 # memory map the file in order 'C'
-fname_new = cm.save_memmap(fname, base_name='memmap_',
+fname_new = cm.save_memmap(fname, base_name=file_name+'_memmap_',
                             order='C', border_to_0=0, dview=dview) # exclude borders
 
 # now load the file
@@ -198,6 +204,7 @@ Yr, dims, T = cm.load_memmap(fname_new)
 images = np.reshape(Yr.T, [T] + list(dims), order='F') 
 #images = Yr.T.reshape((T,) + dims, order='F')
     #load frames in python format (T x X x Y)
+
 
 #%% 
 
@@ -207,8 +214,6 @@ c, dview, n_processes = cm.cluster.setup_cluster(
     backend='local', n_processes=None, single_thread=False)
 
 # %%
-
-# I really need to understand these summary images, like how to interpret
 
 # run summary image
 cn_filter, pnr = cm.summary_images.correlation_pnr(
@@ -235,10 +240,54 @@ plt.title("PNR")
 cnm = cnmf.CNMF(n_processes=n_processes, dview=dview, Ain=None, params=opts)
 cnm.fit(images)
 
+#%% 
+
+# refit the model using only the selected components
+#cnm2 = cnm.refit(images, dview=dview)
+
+#%%
+# save output
+data2save = folder_name+'/data_cnm.hdf5'
+cnm.save(filename=data2save)
+print("cnmf object saved")
+
 # %%
 
-min_SNR = 4            # adaptive way to set threshold on the transient size
-r_values_min = 0.8    # threshold on space consistency (if you lower more components
+# remove background and extract output
+
+include_background = False
+
+# Watch the video without the background in order to confirm results
+mov = cnm.estimates.play_movie(images, q_max=99.9, magnification=1,
+                                 include_bck=include_background, gain_res=2, bpx=bord_px)
+
+"""
+# initialize a nested list
+mov_lst = [[] for i in range(3)]
+counter = 0
+for i in range(len(mov_lst)):
+    mov_lst[i].append(mov[:,:,counter:counter+511])
+    counter = counter+511
+
+plt.subplot(1,3,1)
+plt.imshow(mov_lst[0][0][0])
+plt.subplot(1,3,2)
+plt.imshow(mov_lst[0][0][1])
+plt.subplot(1,3,3)
+plt.imshow(mov_lst[0][0][2])
+"""
+
+print("Based on watching the film, I'm seeing ~27 ROIs")
+
+#%%
+
+# return background, then subtract from movie
+# B = cnm.estimates.compute_background(Yr=images)
+
+
+#%%
+min_SNR = 1            # adaptive way to set threshold on the transient size
+r_values_min = 0.9     # threshold on space consistency (if you lower more components
 #                        will be accepted, potentially with worst quality)
 cnm.params.set('quality', {'min_SNR': min_SNR,
                            'rval_thr': r_values_min,
@@ -256,13 +305,11 @@ print('Number of accepted components: ', len(cnm.estimates.idx_components))
 # plot some results
 cnm.estimates.plot_contours_nb(img=cn_filter, idx=cnm.estimates.idx_components)
 
-# %%
+#%% 
 
-include_background = False
-
-# Watch the video without the background in order to confirm results
-cnm.estimates.play_movie(images, q_max=99.9, magnification=2,
-                                 include_bck=include_background, gain_res=4, bpx=bord_px)
+# I want to be able to watch the movie with components and select those components for removal
+cnm.estimates.make_color_movie(imgs=images, q_max=99.9, magnification=1,
+                               include_bck=True, gain_res=2, bpx=0)
 
 # %%
 
@@ -270,7 +317,35 @@ cnm.estimates.play_movie(images, q_max=99.9, magnification=2,
 
 # we need to identify our components for manual rejection
 #cnm.estimates.view_components(img=cn_filter,idx=cnm.estimates.idx_components)
-cnm.estimates.view_components(img=cn_filter,idx=cnm.estimates.idx_components[1:2])
+cnm.estimates.view_components(img=cn_filter,idx=cnm.estimates.idx_components)
+
+#%% 
+
+"""
+You're using select_components correctly. 
+Either execute evaluate_components 
+followed by select_components(use_object=True) 
+for automatic selection or select_components(idx_components=new_inds) 
+for manual selection. 
+I updated the code in the dev branch (commit 06b4eab), 
+so that it is compatible with iterated component selection. 
+Newly discarded components are now appended to discarded_components 
+instead of overwriting them.
+"""
+
+"""
+Important objects:
+    cnm.estimates.C = temporal traces for each neuron
+"""
+
+# extract components
+roi = cnm.estimates.coordinates
+
+# no idea how to plot these one by one for rejection
+exData = roi[0].get('coordinates')
+plt.imshow(pnr)
+#plt.imshow(exData)
+
 
 # %%
 
