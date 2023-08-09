@@ -23,7 +23,7 @@ import numpy as np
 import caiman as cm
 from caiman.source_extraction import cnmf
 from caiman.utils.utils import download_demo
-from caiman.utils.visualization import inspect_correlation_pnr, nb_inspect_correlation_pnr
+from caiman.utils.visualization import inspect_correlation_pnr, nb_inspect_correlation_pnr, display_animation
 from caiman.motion_correction import MotionCorrect
 from caiman.source_extraction.cnmf import params as params
 from caiman.utils.visualization import plot_contours, nb_view_patches, nb_plot_contour
@@ -44,6 +44,8 @@ except:
 
 import copy
 
+from matplotlib import animation
+
 #%%
 
 # assign a folder name for analysis
@@ -52,11 +54,7 @@ file_name = 'rec_neuron'
 extension = '.tif'
 frame_rate = 10
 cp = caiman_preprocess(folder_name,file_name+extension,frame_rate,activate_cluster=False)
-
-#%%
-
-# play video
-cp.watch_movie()
+#cp.watch_movie()
 
 #%%
 
@@ -97,7 +95,8 @@ gSig_filt = (3,3) # change
 p = 1                       # order of the autoregressive system
 gnb = 2                     # number of global background components
 merge_thr = 0.85            # merging threshold, max correlation allowed
-rf = int(patch_size/2)         # half-size of the patches in pixels. e.g., if rf=25, patches are 50x50
+#rf = int(patch_size/2)         # half-size of the patches in pixels. e.g., if rf=25, patches are 50x50
+rf = int(neuron_size*4)
 stride_cnmf = int(patch_size/4)  # amount of overlap between the patches in pixels
 K = 5                       # number of components per patch
 gSiz = (neuron_size,neuron_size) # estimate size of neuron
@@ -107,7 +106,7 @@ ssub = 2                    # spatial subsampling during initialization
 tsub = 1                    # temporal subsampling during intialization
 ssub_B = 2                  # additional downsampling factor in space for background
 low_rank_background = None  # None leaves background of each patch intact, True performs global low-rank approximation if gnb>0
-gnb = 0                     # number of background components, gnb= 0: Return background as b and W, gnb=-1: Return full rank background B, gnb<-1: Don't return background
+#gnb = 0                     # number of background components, gnb= 0: Return background as b and W, gnb=-1: Return full rank background B, gnb<-1: Don't return background
 nb_patch = 0                # number of background components (rank) per patch if gnb>0, else it is set automatically
 ring_size_factor = 1.4      # radius of ring is gSiz*ring_size_factor
 
@@ -246,6 +245,7 @@ cnm.fit(images)
 #cnm2 = cnm.refit(images, dview=dview)
 
 #%%
+
 # save output
 data2save = folder_name+'/data_cnm.hdf5'
 cnm.save(filename=data2save)
@@ -260,6 +260,13 @@ include_background = False
 # Watch the video without the background in order to confirm results
 mov = cnm.estimates.play_movie(images, q_max=99.9, magnification=1,
                                  include_bck=include_background, gain_res=2, bpx=bord_px)
+
+#%% 
+
+# extract the reconstructed video 
+mov_nobck = mov[:,:,0:512]
+mov_recon = mov[:,:,513:512*2+1]
+
 
 """
 # initialize a nested list
@@ -276,7 +283,6 @@ plt.imshow(mov_lst[0][0][1])
 plt.subplot(1,3,3)
 plt.imshow(mov_lst[0][0][2])
 """
-
 print("Based on watching the film, I'm seeing ~27 ROIs")
 
 #%%
@@ -307,9 +313,11 @@ cnm.estimates.plot_contours_nb(img=cn_filter, idx=cnm.estimates.idx_components)
 
 #%% 
 
+"""
 # I want to be able to watch the movie with components and select those components for removal
-cnm.estimates.make_color_movie(imgs=images, q_max=99.9, magnification=1,
+mov = cnm.estimates.make_color_movie(imgs=images, q_max=99.9, magnification=1,
                                include_bck=True, gain_res=2, bpx=0)
+"""
 
 # %%
 
@@ -318,6 +326,9 @@ cnm.estimates.make_color_movie(imgs=images, q_max=99.9, magnification=1,
 # we need to identify our components for manual rejection
 #cnm.estimates.view_components(img=cn_filter,idx=cnm.estimates.idx_components)
 cnm.estimates.view_components(img=cn_filter,idx=cnm.estimates.idx_components)
+
+#%%
+cnm.estimates.make_color_movie(imgs=images,include_bck=False)
 
 #%% 
 
@@ -338,19 +349,88 @@ Important objects:
     cnm.estimates.C = temporal traces for each neuron
 """
 
+# unit ID
+unitID = 0
+
 # extract components
-roi = cnm.estimates.coordinates
+rois = cnm.estimates.coordinates
+roi = rois[unitID].get('coordinates')
+CoM = rois[unitID].get('CoM')
 
 # no idea how to plot these one by one for rejection
-exData = roi[0].get('coordinates')
 plt.imshow(pnr)
-#plt.imshow(exData)
 
+# plot the transposed numpy array
+#plt.plot(*roi.T, c='w') # the star makes the 2D array and treats than as two input variables
+plt.plot(roi.T[0,:],roi.T[1,:],c='w')
+ax = plt.gca()
+ax.text(CoM[1], CoM[0], str(unitID + 1), color='w',fontsize=20)
+
+# mov_recon is a nested list, each element is a timepoint
+mov_recon.play()
+
+# %%
+
+# --- NEED to do a nearest point search, then use the index to create a mask --- #
+
+# make a mask
+mask_data = np.zeros(pnr.shape, dtype=int, order='F')
+
+# need to find 
+temp_data = pnr[:,:]
+
+def nearest_point(x,y):
+    """
+    A nearest point search in variable x, past on query points in y
+    """
+    out = np.absolute(x[:,0]-y[i])
+
+# 
+from scipy.spatial import KDTree
+import numpy as np
+n = 10
+v = np.random.rand(n, 3)
+kdtree = KDTree(v[0,:])
+d, i = kdtree.query((0,0,0))
+print("closest point:", v[i])
+
+
+from scipy.spatial.distance import cdist
+
+def closest_node(node, nodes):
+    return nodes[cdist([node], nodes).argmin()]
+
+cdist()
+
+# fill in data with 255
+#out = np.where(np.in1d(roi.T[0,:],pnr)) # where y is in x
+
+# %% 
+fig = plt.figure()
+im = plt.imshow(mov_recon[0], interpolation='None', cmap=plt.cm.gray)
+plt.axis('off')
+plt.plot(*roi.T, c='w') 
+
+def animate(i):
+    im.set_data(mov_recon[i])
+    return im,
+
+# call the animator.  blit=True means only re-draw the parts that have changed.
+anim = animation.FuncAnimation(fig, animate, frames=mov_recon.shape[0], interval=1, blit=True)
+
+# call our new function to display the animation
+display_animation(anim, fps=frame_rate)
+
+#%% 
+
+# another way to get the contours
+components = plot_contours(A=cnm.estimates.A,Cn=pnr,idx=cnm.estimates.idx_components)
 
 # %%
 
 # get df/f
-cnm.estimates.detrend_df_f(quantileMin=8, frames_window=250)
+#cnm.estimates.detrend_df_f(quantileMin=8, frames_window=500, flag_auto=True)
+cnm.estimates.detrend_df_f(flag_auto=False, detrend_only=True)
 
 # lets get the dF/F
 dfF_all = cnm.estimates.F_dff

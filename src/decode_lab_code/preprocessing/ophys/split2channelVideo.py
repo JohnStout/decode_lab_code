@@ -24,10 +24,7 @@ frate      = float(input("Please enter the frame rate: "))
 #fileName   = '750K2_200ms_4XSum_video_RedGreen_depolar002.tif'
 path_movie = [os.path.join(loadFolder, fileName)]
 print("loading movie...")
-m_orig = cm.load_movie_chain(path_movie, is3D=True)
-m_temp = m_orig[:,1,:,:]
-downsample_ratio = .2
-m_temp.resize(1, 1, downsample_ratio).play(q_max=99.5, fr=frate, magnification=0.5)   # play movie (press q to exit)
+m_orig = cm.load_movie_chain(path_movie, fr=frate, is3D=True)
 
 # extract movies
 m_ch1 = m_orig[:,0,:,:]

@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 from matplotlib.patches import Rectangle as box
+import tifffile as tiff
 
 # parent class
 class caiman_preprocess:
@@ -27,7 +28,7 @@ class caiman_preprocess:
     def __init__(self, folder_name: str, file_name: str, frate: int, activate_cluster: bool):
         self.fname = [download_demo(file_name,folder_name)]
         self.frate = frate
-        print("Loading movie")
+        print("Loading movie for",self.fname)
         self.movieFrames = cm.load_movie_chain(self.fname,fr=self.frate) # frame rate = 30f/s
 
         # this actually doesn't function without activating the cluster
@@ -68,9 +69,57 @@ class caiman_preprocess:
         movieFrames = self.movieFrames
         exData = np.mean(movieFrames,axis=0)
 
-        fig, ax = plt.subplots()
+        fig, ax = plt.plot()
         plt.imshow(exData)        
         ax.add_patch(box(xy=(0,0), width=patch_size, height=patch_size, edgecolor = 'yellow',fill=False))
         ax.add_patch(box(xy=(0+patch_overlap,0), width=patch_size, height=patch_size, edgecolor = 'yellow',fill=False))
 
         return fig
+    
+    def spatial_downsample(self, downsample_factor: int):
+        """
+        Spatially downsample your data (downsample pixels) by a chosen factor
+        
+        --- INPUTS ---
+        downsample_factor: # of times to downsample. If downsample_factor = 1, then you will
+            spatially downsample the dataset every other datapoint. If downsample_factor = 2, then
+            you will spatially downsample the data two separate times along each axis.
+
+        """
+        for i in range(downsample_factor):
+
+            # when slicing, start:stop:step
+            frameShape = self.movieFrames.shape # frameshape
+
+            # downsample
+            self.movieFrames = self.movieFrames[:,0:frameShape[1]:2,0:frameShape[2]:2]
+
+        return self.movieFrames
+    
+    def temporal_downsample(self, downsample_factor: int):
+        """
+        Spatially downsample your data (downsample pixels) by a chosen factor
+        
+        --- INPUTS ---
+        downsample_factor: # of times to downsample. If downsample_factor = 1, then you will
+            temporally downsample your dataset, essentially cutting your frame rate by downsample_factor
+
+        """
+        for i in range(downsample_factor):
+
+            # when slicing, start:stop:step
+            frameShape = self.movieFrames.shape # frameshape
+
+            # downsample
+            self.movieFrames = self.movieFrames[0:frameShape[0]:2,:,:]
+
+        return self.movieFrames    
+    
+    def save_output(self):
+        """
+        Saving the output. This is useful if you downsampled your dataset and wish to reload the results
+        """
+        print("Saving output")
+        self.fname
+        self.file_root = self.fname[0].split('.')[0]
+        tiff.imsave(self.file_root+'.tif',self.movieFrames)
