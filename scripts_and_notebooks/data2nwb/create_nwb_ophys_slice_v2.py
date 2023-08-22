@@ -10,6 +10,9 @@ from pynwb.behavior import Position, SpatialSeries
 from pynwb.epoch import TimeIntervals
 from pynwb.file import Subject
 
+#import cv2
+from skimage import io
+
 import matplotlib.pyplot as plt
 import numpy as np
 from dateutil.tz import tzlocal
@@ -27,7 +30,7 @@ from pynwb.ophys import (
     TwoPhotonSeries,
 )
 
-from decode_lab_code.preprocessing.ophys.caiman_wrapper import caiman_preprocess
+#from decode_lab_code.preprocessing.ophys.caiman_wrapper import caiman_preprocess
 
 session_start_time = datetime(2018, 4, 25, 2, 30, 3, tzinfo=tz.gettz("US/Pacific"))
 # initialize the nwbfile
@@ -59,11 +62,8 @@ folder_name = input("Enter the folder name for your data: ")
 fname_neuron = input("Enter file name with extension: ")
 frame_rate = float(input("Enter the frame rate: "))
 
-# if you get the Error: "Exception: A cluster is already runnning", restart the kernel
-cp = caiman_preprocess(folder_name,fname_neuron,frame_rate,False)
-
-# lets load in 
-data = cp.get_frames()
+# read data
+im = io.imread(folder_name+'/'+fname_neuron)
 
 # working on getting the real ophys way working. nwbwidgets spits an error
 ophys_prep = 1

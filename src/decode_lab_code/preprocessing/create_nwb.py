@@ -47,8 +47,6 @@ class nwbfile:
     # if working with ophys data, we need to get caiman functions online
     def add_ophys(self):
 
-        from spikeinterface import extractors as ex
-
         """
         This function relies on the following package:
             - caiman
@@ -82,6 +80,9 @@ class nwbfile:
             self.add_acquisition(time_series_with_rate)
 
     def add_ephys(self, folder_name: str, brain_areas: list):
+        
+        from spikeinterface import extractors as ex
+
         """
         This code supports extraction and grouping of data collected with tetrode arrays
         --

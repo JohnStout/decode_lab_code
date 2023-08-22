@@ -65,11 +65,12 @@ class caiman_preprocess:
         return movieFrames
     
     def test_patch_size(self, patch_size: int, patch_overlap: int):
+        
         # This function will interact with the user to test the size of patches to play with
         movieFrames = self.movieFrames
         exData = np.mean(movieFrames,axis=0)
 
-        fig, ax = plt.plot()
+        fig, ax = plt.subplots()
         plt.imshow(exData)        
         ax.add_patch(box(xy=(0,0), width=patch_size, height=patch_size, edgecolor = 'yellow',fill=False))
         ax.add_patch(box(xy=(0+patch_overlap,0), width=patch_size, height=patch_size, edgecolor = 'yellow',fill=False))
@@ -119,7 +120,7 @@ class caiman_preprocess:
         """
         Saving the output. This is useful if you downsampled your dataset and wish to reload the results
         """
-        print("Saving output")
         self.fname
         self.file_root = self.fname[0].split('.')[0]
+        print("Saving output as",self.file_root+'.tif')
         tiff.imsave(self.file_root+'.tif',self.movieFrames)

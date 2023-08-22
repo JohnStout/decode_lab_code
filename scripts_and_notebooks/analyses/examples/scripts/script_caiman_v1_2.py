@@ -9,6 +9,9 @@
 # To estimates F0, 10th percentile of detrended signal
 #
 #
+# FIRST, run script_downsample_data.py if working with Akanksha data
+#
+#
 # -JS
 
 #%% 
@@ -54,19 +57,16 @@ from matplotlib import animation
 #extension = '.tif'
 
 folder_name = '/Users/js0403/ophysdata/Akanksha_data'
-file_name = 'Movie_11_static'
+file_name = 'Movie_21'
 extension = '.tif'
-frame_rate = 30
+frame_rate = 15 # OG sampling rate was 30. The data has been temporally downsampled in script_downsample_data
 
 cp = caiman_preprocess(folder_name,file_name+extension,frame_rate,activate_cluster=False)
-#cp.watch_movie()
 
 #%%
 
-# downsample data
-cp.spatial_downsample(downsample_factor=2)
-cp.save_output()
-
+# watch movie
+cp.watch_movie()
 
 #%%
 
@@ -81,19 +81,9 @@ frameData = cp.get_frames()
 # neuron_size = 13 # pixels - this can be adjusted as needed after visualizing results
 neuron_size = 15
 
-#%% 
-
-# spatially downsample
-frameDown = cp.spatial_downsample(downsample_factor=2)
-
-plt.subplot(1,2,1)
-plt.imshow(frameData[0,:,:])
-plt.subplot(1,2,2)
-plt.imshow(frameDown[0,:,:])
-
 #%% lets identify a good patch size
 # patches were 192 for trevors
-patch_size = 400; patch_overlap = patch_size/2
+patch_size = 150; patch_overlap = patch_size/2
 cp.test_patch_size(patch_size,patch_overlap)
 
 # %%
@@ -122,13 +112,13 @@ merge_thr = 0.85            # merging threshold, max correlation allowed
 rf = int(neuron_size*4)
 stride_cnmf = int(patch_size/4) # amount of overlap between the patches in pixels
 #K = 5                          # number of components per patch
-K = 15
+K = 50
 gSiz = (neuron_size,neuron_size) # estimate size of neuron
 gSig = [int(round(neuron_size-1)/2), int(round(neuron_size-1)/2)] # expected half size of neurons in pixels
 method_init = 'corr_pnr'    # greedy_roi, initialization method (if analyzing dendritic data using 'sparse_nmf'), if 1p, use 'corr_pnr'
-ssub = 2                    # spatial subsampling during initialization (2)
-tsub = 2                    # temporal subsampling during intialization (1)
-ssub_B = 2                  # additional downsampling factor in space for background (2)
+ssub = 1                    # spatial subsampling during initialization (2)
+tsub = 1                    # temporal subsampling during intialization (1)
+ssub_B = 1                  # additional downsampling factor in space for background (2)
 low_rank_background = None  # None leaves background of each patch intact, True performs global low-rank approximation if gnb>0
 #gnb = 0                     # number of background components, gnb= 0: Return background as b and W, gnb=-1: Return full rank background B, gnb<-1: Don't return background
 nb_patch = 2                # number of background components (rank) per patch if gnb>0, else it is set automatically
@@ -271,7 +261,7 @@ cnm.fit(images)
 #%%
 
 # save output
-data2save = folder_name+'/data_cnm.hdf5'
+data2save = folder_name+'/'+file_name+'_cnm.hdf5'
 cnm.save(filename=data2save)
 print("cnmf object saved")
 
@@ -333,7 +323,7 @@ print('Number of accepted components: ', len(cnm.estimates.idx_components))
 # %%
 
 # plot some results
-cnm.estimates.plot_contours_nb(img=cn_filter, idx=cnm.estimates.idx_components)
+cnm.estimates.plot_contours_nb(img=pnr, idx=cnm.estimates.idx_components)
 
 #%% 
 
@@ -349,7 +339,7 @@ mov = cnm.estimates.make_color_movie(imgs=images, q_max=99.9, magnification=1,
 
 # we need to identify our components for manual rejection
 #cnm.estimates.view_components(img=cn_filter,idx=cnm.estimates.idx_components)
-cnm.estimates.view_components(img=cn_filter,idx=cnm.estimates.idx_components)
+cnm.estimates.view_components(img=pnr,idx=cnm.estimates.idx_components)
 
 #%%
 #cnm.estimates.make_color_movie(imgs=images,include_bck=False)
@@ -400,6 +390,7 @@ mov_recon.play()
 #%% 
 
 # another way to get the contours
+
 components = plot_contours(A=cnm.estimates.A,Cn=pnr,idx=cnm.estimates.idx_components)
 
 # %%
