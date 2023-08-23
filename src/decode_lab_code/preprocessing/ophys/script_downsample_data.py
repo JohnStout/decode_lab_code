@@ -11,6 +11,7 @@ folder_name = '/Users/js0403/ophysdata/Akanksha_data'
 pathnames = glob.glob(folder_name+'/*.avi')
 pathnames.sort()
 
+# need to check that this works, i changed downsample code recently
 for pathi in pathnames:
     # split into directory and filename
     pathsplit = pathi.split('/') # split by / delimeter
@@ -24,6 +25,6 @@ for pathi in pathnames:
     # load in dataset
     cp = caiman_preprocess(folder_name,file_name,frame_rate,activate_cluster=False)
     cp.spatial_downsample(downsample_factor=2) # downsample
-    cp.temporal_downsample(downsample_factor=1) # cut frame_rate in half
+    cp.temporal_downsample(downsample_factor=2) # cut frame_rate in half
     cp.save_output() # save
     del cp # delete
