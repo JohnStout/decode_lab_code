@@ -29,6 +29,8 @@ class caiman_preprocess:
     def __init__(self, folder_name: str, file_name: str, frate: int, activate_cluster: bool):
         self.fname = [download_demo(file_name,folder_name)]
         self.frate = frate
+        self.root_folder = folder_name
+        self.root_file = file_name
         print("Loading movie for",self.fname)
         self.movieFrames = cm.load_movie_chain(self.fname,fr=self.frate) # frame rate = 30f/s
 
@@ -75,7 +77,8 @@ class caiman_preprocess:
         plt.imshow(exData)        
         ax.add_patch(box(xy=(0,0), width=patch_size, height=patch_size, edgecolor = 'yellow',fill=False))
         ax.add_patch(box(xy=(0+patch_overlap,0), width=patch_size, height=patch_size, edgecolor = 'yellow',fill=False))
-
+        plt.title("Patches and their overlap")
+        print("Patch size = ",patch_size,". Patch overlap = ",patch_overlap)
         #return fig
     
     def spatial_downsample(self, downsample_factor: int):
@@ -113,7 +116,7 @@ class caiman_preprocess:
 
         return self.movieFrames  
     
-    def motion_correct(self, dview, opts, pw_rigid=False):
+    def motion_correct(self, file_name, dview, opts, pw_rigid=False):
             
             # do motion correction rigid
             mc = MotionCorrect(self.fname, dview=dview, **opts.get_group('motion'))
@@ -130,6 +133,8 @@ class caiman_preprocess:
                 plt.xlabel('frames')
                 plt.ylabel('pixels')
 
+            border_nan = opts.motion.get('border_nan')
+            bord_px = 0 if border_nan == 'copy' else bord_px
             self.fname_new = cm.save_memmap(fname_mc, base_name=file_name+'_memmap_', order='C',
                                     border_to_0=bord_px)   
     
@@ -143,7 +148,7 @@ class caiman_preprocess:
 
         """
 
-        self.fname_new = cm.save_memmap(self.fname, base_name=file_name+'_memmap_',
+        self.fname_memap = cm.save_memmap(self.fname, base_name=file_name+'_memmap_',
                         order='C', border_to_0=0, dview=dview)
 
     def save_output(self):
@@ -152,8 +157,206 @@ class caiman_preprocess:
         """
         self.fname
         self.file_root = self.fname[0].split('.')[0]
-        print("Saving output as",self.file_root+'.tif')
-        tiff.imsave(self.file_root+'.tif',self.movieFrames)
+        self.fname_save = self.file_root+'_newSave.tif'
+        print("Saving output as",self.fname_save)
+        tiff.imsave(self.fname_save,self.movieFrames)
+
+    # inheritance of parent init
+    def miniscope_params(self, neuron_size: int = 15, K = None, decay_time: float = 0.4, nb: int = 0, p: int = 1, patch_size = None, patch_overlap = None, ssub: int = 1, tsub: int = 2, ssub_B: int = 2, merge_thr: float = 0.7):
+
+        """
+            Default parameters for miniscope recordings
+
+            --INPUTS--
+
+            *** ARE YOU HAVING ISSUES WITH COMPONENT ESTIMATION? COMPONENTS TOO SMALL OR TOO LARGE? CHANGE THESE: ***
+
+                neuron_size: the size of the neuron in pixels
+
+                K: Number of neurons estimated per patch
+
+                decay_time: Length of a typical transient in seconds. decay_time is an approximation of the time scale over which to 
+                        expect a significant shift in the calcium signal during a transient. It defaults to `0.4`, which `is 
+                        appropriate for fast indicators (GCaMP6f)`, `slow indicators might use 1 or even more`. 
+                        decay_time does not have to precisely fit the data, approximations are enough
+
+                nb: # of global background components. Default is 2 for relatively homogenous background.
+                        IF nb is too high, components will get sent to the background noise
+
+                p: order of autoregression model. Default = 1.
+                        p = 0: turn deconvolution off
+                        p = 1: for low sampling rate and/or slow calcium transients
+                        p = 2: for transients with visible rise-time
+
+            ** IS PROCESSING TAKING TOO LONG? CHANGE THESE: **
+
+                patch_size: automatically estimated based on the size of the movie/3
+
+                patch_overlap: automatically estimated based on the patch_size/2
+
+                ssub: Spatial subsampling. Default = 2.
+                
+                tsub: temporal subsampling. Default = 2.
+
+                ssub_B: subsampling for background. Default = 2
+
+            **ARE YOU DEALING WITH MULTIPLE COMPONENTS THAT SHOULDVE BEEN MERGED?? TRY THIS: **
+
+                merge_thr: correlation threshold for merging components. Default is R = 0.7
+
+            --OUTPUTS--
+            opts: params.CNMF object for CNMF and motion correction procedures
+        """
+
+        if patch_size == None:
+
+            # use the size of movie to estimate patch_size
+            patch_size = int(len(self.movieFrames[0,:,:])/2)
+
+            patch_overlap = int(patch_size/2)
+
+        else: 
+            if type(patch_size)!=int or type(patch_overlap)!=int:
+                print("converting patch_size and patch_overlap to int")
+                patch_size = int(patch_size)
+                if patch_overlap is None:
+                    patch_overlap = int(patch_size/2)
+                else:
+                    patch_overlap = int(patch_overlap)
+
+        # add those attributes to self
+        self.neuron_size = neuron_size
+        self.patch_size = patch_size
+        self.patch_overlap = patch_overlap
+
+        # dataset dependent parameters
+        fname = self.fname  # directory of data
+        fr = self.frate   # imaging rate in frames per second
+        #decay_time = .4  # length of a typical transient in seconds
+
+        # motion correction parameters - we don't worry about mc
+        motion_correct = True      # flag for motion correcting - we don't need to here
+        max_shifts = (5,5)          # maximum allowed rigid shifts (in pixels)
+        max_deviation_rigid = 3     # maximum shifts deviation allowed for patch with respect to rigid shifts
+        pw_rigid = False            # flag for performing non-rigid motion correction
+        border_nan = 'copy'         # replicate values along the border
+        bord_px = 0
+        #gSig_filt = (int(round(neuron_size-1)/2),int(round(neuron_size-1)/2)) # change
+        gSig_filt = [int(round(neuron_size-1)/4), int(round(neuron_size-1)/4)]
+
+        # parameters for source extraction and deconvolution
+        p = 1                        # order of the autoregressive system
+        gnb = nb                     # number of global background components
+        merge_thr = 0.7              # merging threshold, max correlation allowed, was 0.85
+
+        rf = int(patch_size/2)       # half-size of patches in pixels
+        stride_cnmf = int(rf/2)      # amount of overlap between the patches in pixels
+
+        gSiz = (neuron_size,neuron_size) # estimate size of neuron
+        gSig = [int(round(neuron_size-1)/4), int(round(neuron_size-1)/4)] # expected half size of neurons in pixels
+
+        method_init = 'corr_pnr'    # greedy_roi, initialization method (if analyzing dendritic data using 'sparse_nmf'), if 1p, use 'corr_pnr'
+        low_rank_background = None  # None leaves background of each patch intact, True performs global low-rank approximation if gnb>0
+        nb_patch = nb               # number of background components (rank) per patch if gnb>0, else it is set automatically
+        ring_size_factor = 1.4      # radius of ring is gSiz*ring_size_factor
+
+        if stride_cnmf <= 4*gSig[0]:
+            Warning('Considering increasing the size of patche_size')        
+
+        # These values need to change based on the correlation image
+        min_corr = .8               # min peak value from correlation image
+        min_pnr = 10                # min peak to noise ration from PNR image
+
+        # create a parameterization object
+        opts_dict = {
+                    # parameters for opts.data
+                    'fnames': fname,
+                    'fr': fr,
+                    'decay_time': decay_time,
+
+                    # parameters for opts.motion  
+                    #'strides': strides,
+                    'pw_rigid': pw_rigid,
+                    'border_nan': border_nan,
+                    'gSig_filt': gSig_filt,
+                    'max_deviation_rigid': max_deviation_rigid,   
+                    #'overlaps': overlaps,
+                    'max_shifts': max_shifts,    
+
+                    # parameters for preprocessing
+                    #'n_pixels_per_process': None, # how is this estimated?
+
+                    # parameters for opts.init
+                    'K': K, 
+                    'gSig': gSig,
+                    'gSiz': gSiz,  
+                    'nb': gnb, # also belongs to params.temporal 
+                    'normalize_init': False,   
+                    'rolling_sum': True,    
+                    'ssub': ssub,
+                    'tsub': tsub,
+                    'ssub_B': ssub_B,    
+                    'center_psf': True,
+                    'min_corr': min_corr,
+                    'min_pnr': min_pnr,            
+
+                    # parameters for opts.patch
+                    'border_pix': bord_px,  
+                    'del_duplicates': True,
+                    'rf': rf,  
+                    'stride': stride_cnmf,
+                    'low_rank_background': low_rank_background,                     
+                    'only_init': True,
+
+                    # parameters for opts.spatial
+                    'update_background_components': True,
+
+                    # parameters for opts.temporal
+                    'method_deconvolution': 'oasis',
+                    'p': p,
+
+                    # not sure
+                    'method_init': method_init,
+                    'merge_thr': merge_thr, 
+                    'ring_size_factor': ring_size_factor}
+
+        opts = params.CNMFParams(params_dict=opts_dict) 
+        return opts    
+
+    def fit_cnm(self, images, n_processes, dview, Ain=None, params=None):
+
+        """
+            This function fits the video with the CNMF algorithm
+
+            --INPUTS--
+                images: the video file, as memmap file
+                n_processes: number of cpu processes for parallel computing
+                dview: pool status for parallel processsing
+                Ain: None
+                params: opts input
+        """
+
+        if params is None:
+            print("Defaulting to miniscope parameters as no params object was detected")
+            params = self.miniscope_params()
+
+        # fit data with cnmf
+        print("Fitting CNMF...")
+        cnm = cnmf.CNMF(n_processes=n_processes, dview=dview, Ain=None, params=params)
+        cnm.fit(images) # fit images input
+
+        # save output
+        print("saving...")
+        time_id = saving_identifier() # get unique identifier of the time
+        data2save = self.root_folder+'/'+self.root_file+'_cnm_'+time_id+'.hdf5' # file storage name
+        cnm.save(filename=data2save) # save
+        cm.stop_server(dview=dview) # stop parallel processing
+
+        # return output
+        self.cnm = cnm
+
+        return cnm
+                
 
 class caiman_cnm_curation:
 
@@ -194,13 +397,15 @@ class caiman_cnm_curation:
     
 
     # a plotter function
-    def plot_components(img, cnm, colors: list, colorMap='viridis'):
+    def plot_components(img, cnm, colors: list, colorMap='viridis', clim = []):
 
         """
+        Args:
             img: image to plot results over
             cnm: cnm object 
             colors: list of color indicators
             colorMap: color for imshow map
+            clim: colorbar range of heat map
         """
 
         # extract components
@@ -212,6 +417,7 @@ class caiman_cnm_curation:
         # plot components
         plt.subplot(1,2,1)
         plt.imshow(img,colorMap)
+        plt.clim(clim)
         for i in range(len(good_rois)):
             roi = good_rois[i].get('coordinates')
             CoM = good_rois[i].get('CoM')
@@ -270,6 +476,60 @@ class caiman_cnm_curation:
 
         return cnm
     
+    def inspect_corr_pnr(correlation_image_pnr, pnr_image, cbar_limits: list = []):
+        import pylab as pl
+
+        """
+        inspect correlation and pnr images to infer the min_corr, min_pnr
+
+        Args:
+            correlation_image_pnr: ndarray
+                correlation image created with caiman.summary_images.correlation_pnr
+        
+            pnr_image: ndarray
+                peak-to-noise image created with caiman.summary_images.correlation_pnr
+
+            cbar_limits: nested list containing colorbar scale
+
+        Output:
+            min_corr: Minimum correlation from the correlation_image_pnr
+            min_pnr: minimum peak to noise ratio returned from the pnr_image
+
+            * these outputs will return min values of the raw inputs, OR the cbar_limits you provide
+        """
+
+        fig = pl.figure(figsize=(10, 4))
+        pl.axes([0.05, 0.2, 0.4, 0.7])
+        im_cn = pl.imshow(correlation_image_pnr, cmap='jet')
+        pl.title('correlation image')
+        pl.colorbar()
+        if len(cbar_limits)!=0:
+            pl.clim(cbar_limits[0])
+        else:
+            pl.clim()
+        
+        pl.axes([0.5, 0.2, 0.4, 0.7])
+        im_pnr = pl.imshow(pnr_image, cmap='jet')
+        pl.title('PNR')
+        pl.colorbar()
+        if len(cbar_limits)!=0:
+            pl.clim(cbar_limits[1])
+        else:
+            pl.clim()
+
+        # assign min_corr and min_pnr based on the image you create
+        if len(cbar_limits)==0:
+            min_corr = round(np.min(correlation_image_pnr),1)
+            min_pnr  = round(np.min(pnr_image),1)
+        else:
+            min_corr = cbar_limits[0][0]
+            min_pnr = cbar_limits[1][0]
+
+        print("minimum correlation: ",min_corr)
+        print("minimum peak-to-noise ratio: ",min_pnr)
+
+        return min_corr, min_pnr
+    
 class cluster_helper:
 
     def __init__(self):
@@ -303,3 +563,4 @@ def saving_identifier():
     now = now.split('.')
     time_id = now[0]
     return time_id
+
