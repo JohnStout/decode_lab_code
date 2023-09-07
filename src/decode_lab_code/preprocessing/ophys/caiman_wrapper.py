@@ -22,6 +22,7 @@ import numpy as np
 from matplotlib.patches import Rectangle as box
 import tifffile as tiff
 from datetime import datetime
+import os
 
 # parent class
 class caiman_preprocess:
@@ -59,15 +60,6 @@ class caiman_preprocess:
             'ipyparallel_dview_object': self.dview
         }
         return init_dict
-    
-    def update_fname(self, fname_update: str):
-        """
-            This function updates your caiman_preprocess object with a new movie. This might be useful in times where
-            you split your video into two channels, save one video out, then upload a new video.
-        """
-        fname_update = [fname_update] # put inside list
-        self.movieFrames = cm.load_movie_chain(fname_update,fr=self.frate)
-        print("Updated fname is: ",fname_update[0])
 
     def load_second_video(self, fname2: str):
         """
@@ -134,6 +126,8 @@ class caiman_preprocess:
 
         # downsample
         self.movieFrames = self.movieFrames[:,0:frameShape[1]:downsample_factor,0:frameShape[2]:downsample_factor]
+        self.downsampled_spatial = True
+        self.downsampled_spatial_factor = downsample_factor
 
         return self.movieFrames
     
@@ -152,10 +146,12 @@ class caiman_preprocess:
         self.movieFrames = self.movieFrames[0:frameShape[0]:downsample_factor,:,:]
 
         self.frate = self.frate/downsample_factor
+        self.downsampled_temporal = True
+        self.downsampled_temporal_factor = downsample_factor
 
         return self.movieFrames  
     
-    def motion_correct(self, file_name = None, dview = None, opts = None, pw_rigid=False, fname = None):
+    def motion_correct(self, file_name = None, dview = None, opts = None, pw_rigid=False, fname = None, save_dir = None):
             
             if fname is None:
                 print("Defaulting fname to: ",self.fname)
@@ -183,7 +179,7 @@ class caiman_preprocess:
             self.fname_memap = cm.save_memmap(fname_mc, base_name=file_name+'_memmap_', order='C',
                                     border_to_0=bord_px)   
     
-    def save_memap(self, file_name = None, dview = None, fname = None):
+    def save_memap(self, file_name = None, dview = None, fname = None, save_dir = None):
         """
             This function saves your data as a memory-mapped file 
 
@@ -204,19 +200,74 @@ class caiman_preprocess:
         if type(fname) is str:
             fname = [fname]
 
+        if save_dir is None:
+            save_out = fname
+        else:
+            save_out = [save_dir]
         self.fname_memap = cm.save_memmap(fname, base_name=file_name+'_memmap_',
                         order='C', border_to_0=0, dview=dview)
         print("Memory mapped file (fname_memap):", self.fname_memap)
 
-    def save_output(self):
+    def save_output(self, save_dir = None):
         """
         Saving the output. This is useful if you downsampled your dataset and wish to reload the results
+
+        There are two save options:
+            1) keep save_dir empty/set to None (don't provide the input):
+                This saves a bunch of files to whatever the working directory is (self.fname)
+            2) Define save_dir
+                This creates a new directory wherever you want that directory to be located. This is preferred
+        
+        Args: Arguments are optional
+            save_dir: string containing directory to save data
+
         """
-        self.fname
-        self.file_root = self.fname[0].split('.')[0]
-        self.fname_save = self.file_root+'_newSave.tif'
+
+        file_root = self.fname[0].split('.')[0]
+        if save_dir is None:
+            # save files according to the current directory
+            self.fname_save = file_root+'_newSave.tif'
+        else:
+            # save file based on input directory
+            self.fname_save = save_dir+'/'+self.root_file.split('.')[0]
+
+            # update for saving
+            new_dir = save_dir+'/'+self.root_file.split('.')[0]
+
+            # make directory to save the dataset
+            os.mkdir(new_dir)
+
+            # get information about downsampling
+            if self.downsampled_spatial == True:
+                save_ds_spatial = '_spatialDSx'+str(self.downsampled_spatial_factor)
+            else:
+                save_ds_spatial = ''
+
+            if self.downsampled_temporal == True:
+                save_ds_temporal = '_temporalDSx'+str(self.downsampled_spatial_factor)
+            else:
+                save_ds_temporal = ''
+
+            # create save directory
+            save_dir_new = new_dir+'/'+self.root_file.split('.')[0]+save_ds_temporal+save_ds_spatial+'_'+str(self.frate)+'fps'+'.tif'
+            self.fname_save = save_dir_new
+
         print("Saving output as",self.fname_save)
         tiff.imsave(self.fname_save,self.movieFrames)
+
+    def update_fname(self, fname_update: str):
+        """
+            This function updates your caiman_preprocess object with a new movie. This might be useful in times where
+            you split your video into two channels, save one video out, then upload a new video.
+
+            Args:
+                fname_update: update fname. Raw format should be a str inside a list, but just give a str 
+                    and let the code handle the rest
+        """
+        if fname_update is str:
+            fname_update = [fname_update] # put inside list
+        self.movieFrames = cm.load_movie_chain(fname_update,fr=self.frate)
+        print("Updated fname is: ",fname_update[0])        
 
     def split_4D_movie(self, structural_index: int, functional_index: int):
         """
@@ -249,355 +300,7 @@ class caiman_preprocess:
         tiff.imsave(self.fname_struct,self.structMovie)  
         tiff.imsave(self.fname_funct,self.functMovie)            
 
-    # inheritance of parent init
-    def miniscope_params(self, neuron_size: int = 15, K = None, decay_time: float = 0.4, nb: int = 0, p: int = 1, patch_size = None, patch_overlap = None, ssub: int = 1, tsub: int = 2, ssub_B: int = 2, merge_thr: float = 0.7, fname = None, fr = None, img = None):
-
-        """
-            Default parameters for miniscope recordings
-
-            --INPUTS--
-
-            *** ARE YOU HAVING ISSUES WITH COMPONENT ESTIMATION? COMPONENTS TOO SMALL OR TOO LARGE? CHANGE THESE: ***
-
-                neuron_size: the size of the neuron in pixels
-
-                K: Number of neurons estimated per patch
-
-                decay_time: Length of a typical transient in seconds. decay_time is an approximation of the time scale over which to 
-                        expect a significant shift in the calcium signal during a transient. It defaults to `0.4`, which `is 
-                        appropriate for fast indicators (GCaMP6f)`, `slow indicators might use 1 or even more`. 
-                        decay_time does not have to precisely fit the data, approximations are enough
-
-                nb: # of global background components. Default is 2 for relatively homogenous background.
-                        IF nb is too high, components will get sent to the background noise
-
-                p: order of autoregression model. Default = 1.
-                        p = 0: turn deconvolution off
-                        p = 1: for low sampling rate and/or slow calcium transients
-                        p = 2: for transients with visible rise-time
-
-            ** IS PROCESSING TAKING TOO LONG? CHANGE THESE: **
-
-                patch_size: automatically estimated based on the size of the movie/3
-
-                patch_overlap: automatically estimated based on the patch_size/2
-
-                ssub: Spatial subsampling. Default = 2.
-                
-                tsub: temporal subsampling. Default = 2.
-
-                ssub_B: subsampling for background. Default = 2
-
-            **ARE YOU DEALING WITH MULTIPLE COMPONENTS THAT SHOULDVE BEEN MERGED?? TRY THIS: **
-
-                merge_thr: correlation threshold for merging components. Default is R = 0.7
-
-            --OUTPUTS--
-            opts: params.CNMF object for CNMF and motion correction procedures
-        """
-
-        if patch_size == None:
-
-            if img not in locals():
-                # use the size of movie to estimate patch_size
-                patch_size = int(len(self.movieFrames[0,:,:])/2)
-            else:
-                patch_size = int(len(img[0,:,:])/2)
-
-            patch_overlap = int(patch_size/2)
-
-        else: 
-            if type(patch_size)!=int or type(patch_overlap)!=int:
-                print("converting patch_size and patch_overlap to int")
-                patch_size = int(patch_size)
-                if patch_overlap is None:
-                    patch_overlap = int(patch_size/2)
-                else:
-                    patch_overlap = int(patch_overlap)
-
-        # add those attributes to self
-        self.neuron_size = neuron_size
-        self.patch_size = patch_size
-        self.patch_overlap = patch_overlap
-
-        # dataset dependent parameters
-        if fname is None:
-            print("Defaulting fname to: ", self.fname)
-            fname = self.fname  # directory of data
-        if fr is None:
-            print("Defaulting frame rate to: ", self.frate)
-            fr = self.frate   # imaging rate in frames per second
-        #decay_time = .4  # length of a typical transient in seconds
-
-        # motion correction parameters - we don't worry about mc
-        motion_correct = True      # flag for motion correcting - we don't need to here
-        max_shifts = (5,5)          # maximum allowed rigid shifts (in pixels)
-        max_deviation_rigid = 3     # maximum shifts deviation allowed for patch with respect to rigid shifts
-        pw_rigid = False            # flag for performing non-rigid motion correction
-        border_nan = 'copy'         # replicate values along the border
-        bord_px = 0
-        #gSig_filt = (int(round(neuron_size-1)/2),int(round(neuron_size-1)/2)) # change
-        gSig_filt = [int(round(neuron_size-1)/4), int(round(neuron_size-1)/4)]
-
-        # parameters for source extraction and deconvolution
-        gnb = nb                     # number of global background components
-
-        rf = int(patch_size/2)       # half-size of patches in pixels
-        stride_cnmf = int(rf/2)      # amount of overlap between the patches in pixels
-
-        gSiz = (neuron_size,neuron_size) # estimate size of neuron
-        gSig = [int(round(neuron_size-1)/4), int(round(neuron_size-1)/4)] # expected half size of neurons in pixels
-
-        method_init = 'corr_pnr'    # greedy_roi, initialization method (if analyzing dendritic data using 'sparse_nmf'), if 1p, use 'corr_pnr'
-        low_rank_background = None  # None leaves background of each patch intact, True performs global low-rank approximation if gnb>0
-        nb_patch = nb               # number of background components (rank) per patch if gnb>0, else it is set automatically
-        ring_size_factor = 1.4      # radius of ring is gSiz*ring_size_factor
-
-        if stride_cnmf <= 4*gSig[0]:
-            Warning('Considering increasing the size of patche_size')        
-
-        # These values need to change based on the correlation image
-        min_corr = .8               # min peak value from correlation image
-        min_pnr = 10                # min peak to noise ration from PNR image
-
-        # create a parameterization object
-        opts_dict = {
-                    # parameters for opts.data
-                    'fnames': fname,
-                    'fr': fr,
-                    'decay_time': decay_time,
-
-                    # parameters for opts.motion  
-                    #'strides': strides,
-                    'pw_rigid': pw_rigid,
-                    'border_nan': border_nan,
-                    'gSig_filt': gSig_filt,
-                    'max_deviation_rigid': max_deviation_rigid,   
-                    #'overlaps': overlaps,
-                    'max_shifts': max_shifts,    
-
-                    # parameters for preprocessing
-                    #'n_pixels_per_process': None, # how is this estimated?
-
-                    # parameters for opts.init
-                    'K': K, 
-                    'gSig': gSig,
-                    'gSiz': gSiz,  
-                    'nb': gnb, # also belongs to params.temporal 
-                    'normalize_init': False,   
-                    'rolling_sum': True,    
-                    'ssub': ssub,
-                    'tsub': tsub,
-                    'ssub_B': ssub_B,    
-                    'center_psf': True,
-                    'min_corr': min_corr,
-                    'min_pnr': min_pnr,            
-
-                    # parameters for opts.patch
-                    'border_pix': bord_px,  
-                    'del_duplicates': True,
-                    'rf': rf,  
-                    'stride': stride_cnmf,
-                    'low_rank_background': low_rank_background,                     
-                    'only_init': True,
-
-                    # parameters for opts.spatial
-                    'update_background_components': True,
-
-                    # parameters for opts.temporal
-                    'method_deconvolution': 'oasis',
-                    'p': p,
-
-                    # not sure
-                    'method_init': method_init,
-                    'merge_thr': merge_thr, 
-                    'ring_size_factor': ring_size_factor}
-
-        opts = params.CNMFParams(params_dict=opts_dict) 
-        return opts    
-    
-    def microscope_params(self, neuron_size: int = 15, K = 10, decay_time: float = 2, nb: int = 2, p: int = 0, patch_size = None, patch_overlap = None, ssub: int = 2, tsub: int = 2, ssub_B: int = 2, merge_thr: float = 0.7, fname = None, fr = None, img = None):
-
-        """
-            Default parameters for miniscope recordings
-
-            --INPUTS--
-
-            *** ARE YOU HAVING ISSUES WITH COMPONENT ESTIMATION? COMPONENTS TOO SMALL OR TOO LARGE? CHANGE THESE: ***
-
-                neuron_size: the size of the neuron in pixels
-
-                K: Number of neurons estimated per patch
-
-                decay_time: Length of a typical transient in seconds. decay_time is an approximation of the time scale over which to 
-                        expect a significant shift in the calcium signal during a transient. It defaults to `0.4`, which `is 
-                        appropriate for fast indicators (GCaMP6f)`, `slow indicators might use 1 or even more`. 
-                        decay_time does not have to precisely fit the data, approximations are enough
-
-                nb: # of global background components. Default is 2 for relatively homogenous background.
-                        IF nb is too high, components will get sent to the background noise
-
-                p: order of autoregression model. Default = 1.
-                        p = 0: turn deconvolution off
-                        p = 1: for low sampling rate and/or slow calcium transients
-                        p = 2: for transients with visible rise-time
-
-            ** IS PROCESSING TAKING TOO LONG? CHANGE THESE: **
-
-                patch_size: automatically estimated based on the size of the movie/3
-
-                patch_overlap: automatically estimated based on the patch_size/2
-
-                ssub: Spatial subsampling. Default = 2.
-                
-                tsub: temporal subsampling. Default = 2.
-
-                ssub_B: subsampling for background. Default = 2
-
-            **ARE YOU DEALING WITH MULTIPLE COMPONENTS THAT SHOULDVE BEEN MERGED?? TRY THIS: **
-
-                merge_thr: correlation threshold for merging components. Default is R = 0.7
-
-            --OUTPUTS--
-            opts: params.CNMF object for CNMF and motion correction procedures
-        """
-
-        if patch_size == None:
-            
-            if img not in locals():
-                # use the size of movie to estimate patch_size
-                patch_size = int(len(self.movieFrames[0,:,:])/2)
-            else:
-                patch_size = int(len(img[0,:,:])/2)
-
-            patch_overlap = int(patch_size/2)
-
-        else: 
-            if type(patch_size)!=int or type(patch_overlap)!=int:
-                print("converting patch_size and patch_overlap to int")
-                patch_size = int(patch_size)
-                if patch_overlap is None:
-                    patch_overlap = int(patch_size/2)
-                else:
-                    patch_overlap = int(patch_overlap)
-
-        # add those attributes to self
-        self.neuron_size = neuron_size
-        self.patch_size = patch_size
-        self.patch_overlap = patch_overlap
-
-        # dataset dependent parameters
-        if fname is None:
-            print("Defaulting fname to: ", self.fname)
-            fname = self.fname  # directory of data
-        if fr is None:
-            print("Defaulting frame rate to: ", self.frate)
-            fr = self.frate   # imaging rate in frames per second
-        #decay_time = .4  # length of a typical transient in seconds
-
-        # motion correction parameters - we don't worry about mc
-        motion_correct = True      # flag for motion correcting - we don't need to here
-        max_shifts = (5,5)          # maximum allowed rigid shifts (in pixels)
-        max_deviation_rigid = 3     # maximum shifts deviation allowed for patch with respect to rigid shifts
-        pw_rigid = False            # flag for performing non-rigid motion correction
-        border_nan = 'copy'         # replicate values along the border
-        bord_px = 0
-        #gSig_filt = (int(round(neuron_size-1)/2),int(round(neuron_size-1)/2)) # change
-        gSig_filt = [int(round(neuron_size-1)/4), int(round(neuron_size-1)/4)]
-
-        # parameters for source extraction and deconvolution
-        gnb = nb                     # number of global background components
-
-        rf = int(patch_size/2)       # half-size of patches in pixels
-        stride_cnmf = int(rf/2)      # amount of overlap between the patches in pixels
-
-        gSiz = (neuron_size,neuron_size) # estimate size of neuron
-        gSig = [int(round(neuron_size-1)/4), int(round(neuron_size-1)/4)] # expected half size of neurons in pixels
-
-        method_init = 'corr_pnr'    # greedy_roi, initialization method (if analyzing dendritic data using 'sparse_nmf'), if 1p, use 'corr_pnr'
-        low_rank_background = True  # None leaves background of each patch intact, True performs global low-rank approximation if gnb>0
-        nb_patch = nb               # number of background components (rank) per patch if gnb>0, else it is set automatically
-        ring_size_factor = 1.4      # radius of ring is gSiz*ring_size_factor
-
-        if stride_cnmf <= 4*gSig[0]:
-            Warning('Considering increasing the size of patche_size')        
-
-        # These values need to change based on the correlation image
-        min_corr = .8               # min peak value from correlation image
-        min_pnr = 10                # min peak to noise ration from PNR image
-        
-        # parameters for component evaluation
-        min_SNR = 2.0    # signal to noise ratio for accepting a component
-        rval_thr = 0.85  # space correlation threshold for accepting a component
-        cnn_thr = 0.99   # threshold for CNN based classifier, was 0.99
-        cnn_lowest = 0.1 # neurons with cnn probability lower than this value are rejected
-
-        # create a parameterization object
-        opts_dict = {
-                    # parameters for opts.data
-                    'fnames': fname,
-                    'fr': fr,
-                    'decay_time': decay_time,
-
-                    # parameters for opts.motion  
-                    #'strides': strides,
-                    'pw_rigid': pw_rigid,
-                    'border_nan': border_nan,
-                    'gSig_filt': gSig_filt,
-                    'max_deviation_rigid': max_deviation_rigid,   
-                    #'overlaps': overlaps,
-                    'max_shifts': max_shifts,    
-
-                    # parameters for preprocessing
-                    #'n_pixels_per_process': None, # how is this estimated?
-
-                    # parameters for opts.init
-                    'K': K, 
-                    'gSig': gSig,
-                    'gSiz': gSiz,  
-                    'nb': gnb, # also belongs to params.temporal 
-                    'normalize_init': False,   
-                    'rolling_sum': True,    
-                    'ssub': ssub,
-                    'tsub': tsub,
-                    'ssub_B': ssub_B,    
-                    'center_psf': True,
-                    'min_corr': min_corr,
-                    'min_pnr': min_pnr,            
-
-                    # parameters for opts.patch
-                    'border_pix': bord_px,  
-                    'del_duplicates': True,
-                    'rf': rf,  
-                    'stride': stride_cnmf,
-                    'low_rank_background': low_rank_background,                     
-                    'only_init': True,
-
-                    # parameters for opts.spatial
-                    'update_background_components': True,
-
-                    # parameters for opts.temporal
-                    'method_deconvolution': 'oasis',
-                    'p': p,
-
-                    # parameters for opts.quality
-                    'min_SNR': min_SNR,
-                    'cnn_lowest': cnn_lowest,
-                    'rval_thr': rval_thr,
-                    'use_cnn': True,
-                    'min_cnn_thr': cnn_thr,                   
-
-                    # not sure
-                    'method_init': method_init,
-                    'merge_thr': merge_thr, 
-                    'ring_size_factor': ring_size_factor}
-
-        opts = params.CNMFParams(params_dict=opts_dict) 
-        return opts    
-
-
-
-    def fit_cnm(self, images, n_processes, dview, Ain=None, params=None):
+    def fit_cnm(self, images, n_processes, dview, Ain=None, params=None, save_dir=None):
 
         """
             This function fits the video with the CNMF algorithm
@@ -622,7 +325,10 @@ class caiman_preprocess:
         # save output
         print("saving...")
         time_id = saving_identifier() # get unique identifier of the time
-        data2save = self.root_folder+'/'+self.root_file+'_cnm_'+time_id+'.hdf5' # file storage name
+        if save_dir is None:
+            data2save = self.root_folder+'/'+self.root_file+'_cnm_'+time_id+'.hdf5' # file storage name
+        else:
+            data2save = save_dir+'/'+self.root_file+'_cnm_'+time_id+'.hdf5' # file storage name
         cnm.save(filename=data2save) # save
         cm.stop_server(dview=dview) # stop parallel processing
 
@@ -729,11 +435,14 @@ class caiman_cnm_curation:
         merge_components: helper function to merge
         idxMergeGood: list of accepted components to merge
         """
-        for i in range(len(idxMergeGood)):
-            for ii in range(len(idxMergeGood[i])):
-                idxMergeGood[i][ii]=idxMergeGood[i][ii]-1
+        #for i in range(len(idxMergeGood)):
+            #for ii in range(len(idxMergeGood[i])):
+                #idxMergeGood[i][ii]=idxMergeGood[i][ii]-1
+        
+        # need to make sure that we're indexing from the raw components, not the good ones
 
         # subtract 1 because the visual plots below have +1 due to 0-indexing
+        #cnm.estimates.manual_merge(cnm.estimates.idx_components[idxMergeGood],cnm.params)
         cnm.estimates.manual_merge(cnm.estimates.idx_components[idxMergeGood],cnm.params)
 
         return cnm
