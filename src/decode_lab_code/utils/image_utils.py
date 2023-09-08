@@ -2,8 +2,9 @@
 import numpy as np
 import tifffile as tf
 import glob
+#import cv2
 
-def stacktiff(dir: str, dir_save = None):
+def stacktiff(dir: str, dir_save = None, downsample_factor = None):
     """
     This function takes a folder with a bunch of .tif images and stacks them
 
@@ -33,11 +34,15 @@ def stacktiff(dir: str, dir_save = None):
     counter = 0
     for iname in pathnames:
         im = tf.imread(iname)
-        images.append(tf.imread(iname))
+        if downsample_factor is not None:
+            im = im[0::downsample_factor,0::downsample_factor]
+        images.append(im)
         counter = counter+1
         print("Completed with",(counter/len(pathnames)*100),'%')
-
-    tf.imwrite(dir_save+'/tiff_stack.tif')
+        del im
+    images = np.asarray(images) # convert to numpy array
+    print("saving to ",dir_save)
+    tf.imwrite(dir_save+'/tiff_stack.tif',images) # save as tiff
 
 
 
