@@ -125,7 +125,7 @@ class caiman_preprocess:
         frameShape = self.movieFrames.shape # frameshape
 
         # downsample
-        self.movieFrames = self.movieFrames[:,0:frameShape[1]:downsample_factor,0:frameShape[2]:downsample_factor]
+        self.movieFrames = self.movieFrames[:,::downsample_factor,::downsample_factor]
         self.downsampled_spatial = True
         self.downsampled_spatial_factor = downsample_factor
 
@@ -143,7 +143,7 @@ class caiman_preprocess:
         frameShape = self.movieFrames.shape # frameshape
 
         # downsample
-        self.movieFrames = self.movieFrames[0:frameShape[0]:downsample_factor,:,:]
+        self.movieFrames = self.movieFrames[::downsample_factor,:,:]
 
         self.frate = self.frate/downsample_factor
         self.downsampled_temporal = True
