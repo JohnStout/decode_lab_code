@@ -8,7 +8,12 @@ import glob
 
 # assign directory to downsample and convert data
 folder_name = '/Users/js0403/ophysdata/Akanksha_data'
-pathnames = glob.glob(folder_name+'/*.avi')
+extension = '.avi' # define the extension
+
+# frame_rate (define me)
+frame_rate = 30
+
+pathnames = glob.glob(folder_name+'/*'+extension)
 pathnames.sort()
 
 # need to check that this works, i changed downsample code recently
@@ -18,9 +23,6 @@ for pathi in pathnames:
     file_name = pathsplit[len(pathsplit)-1] # get file_name
     pathsplit.pop(len(pathsplit)-1) # remove the file_name
     folder_name = '/'.join(pathsplit) # folder_name directory
-
-    # frame_rate
-    frame_rate = 30
 
     # load in dataset
     cp = caiman_preprocess(folder_name,file_name,frame_rate,activate_cluster=False)

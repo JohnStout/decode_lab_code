@@ -393,7 +393,6 @@ class caiman_cnm_curation:
         idx = cnm.estimates.idx_components # get accepted components
         good_rois = [rois[i] for i in range(len(rois)) if i in idx]
 
-
         # plot components
         plt.subplot(1,2,1)
         plt.imshow(img,colorMap)
