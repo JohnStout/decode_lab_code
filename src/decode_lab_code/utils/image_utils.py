@@ -2,6 +2,7 @@
 import numpy as np
 import tifffile as tf
 import glob
+import tarfile
 #import cv2
 
 def stacktiff(dir: str, dir_save = None, downsample_factor = None):
@@ -11,6 +12,8 @@ def stacktiff(dir: str, dir_save = None, downsample_factor = None):
     Args:
         dir: directory containing image data to stack
         dir_save: OPTIONAL but recommended. Directory to save stacked data.
+        downsample_factor: OPTIONAL.
+            downsample_factor = 2 spatially reduces your dataset by a factor of 2
     """
 
     if dir_save is None:
@@ -44,5 +47,16 @@ def stacktiff(dir: str, dir_save = None, downsample_factor = None):
     print("saving to ",dir_save)
     tf.imwrite(dir_save+'/tiff_stack.tif',images) # save as tiff
 
+def extract_tar(path_name,data_name):
+    """
+    Function used to extract .tar file
 
-
+    Args
+        path_name: directory of dataset
+    """
+    # path_name = '/Users/js0403/Documents/DECODE-lab-code/calcium_imaging_analyses/datasets/'
+    # data_name = 'FN_dataSharing.tgz-aa'
+    data_dir = path_name+data_name
+    file = tarfile.open(data_dir)
+    file.extractall(path_name)
+    file.close()
