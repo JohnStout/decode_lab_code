@@ -19,20 +19,20 @@
 
 # This code will generate an NWB file for ophys data
 from datetime import datetime
-from uuid import uuid4
-import numpy as np
 from dateutil import tz
+from dateutil.tz import tzlocal
+
+from uuid import uuid4
+
+import numpy as np
+import matplotlib.pyplot as plt
+
 from pynwb import NWBHDF5IO, NWBFile, TimeSeries
 from pynwb.behavior import Position, SpatialSeries
 from pynwb.epoch import TimeIntervals
 from pynwb.file import Subject
 
-#import cv2
 from skimage import io
-
-import matplotlib.pyplot as plt
-import numpy as np
-from dateutil.tz import tzlocal
 
 from pynwb import NWBHDF5IO, NWBFile, TimeSeries
 from pynwb.image import ImageSeries
@@ -46,6 +46,8 @@ from pynwb.ophys import (
     RoiResponseSeries,
     TwoPhotonSeries,
 )
+
+from decode_lab_code.utils.nwb_utils import write_nwb
 
 # ------------------------------------------------- #
 
@@ -69,7 +71,7 @@ sex = "" # Male/Female
 
 # data/directory information
 folder_name = '/Users/js0403/ophysdata/Akanksha/Tiff_series_Process_7' # directory where the data is stored
-fname_neuron = 'tiff_stack.tif' # name of the data file
+fname = 'tiff_stack.tif' # name of the data file
 frame_rate = 10 # frame rate
 
 # recording device information
@@ -125,7 +127,7 @@ nwbfile.subject = Subject(
 )
 
 # read data
-data = io.imread(folder_name+'/'+fname_neuron)
+data = io.imread(folder_name+'/'+fname)
 data_np = np.array(data)
 
 # create device
@@ -168,6 +170,4 @@ one_p_series1 = OnePhotonSeries(
 nwbfile.add_acquisition(one_p_series1)
 
 # save output
-print("Saving data_ophys_nwb to: "+folder_name)
-with NWBHDF5IO(folder_name+"/data_ophys_nwb.nwb", "w") as io:
-    io.write(nwbfile)
+write_nwb(folder_name = folder_name, data_name = fname, nwb_file=nwbfile)
