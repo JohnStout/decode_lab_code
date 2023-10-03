@@ -60,15 +60,3 @@ def extract_tar(path_name,data_name):
     file = tarfile.open(data_dir)
     file.extractall(path_name)
     file.close()
-
-def sequential_memmap():
-    # Is there a way to load in parts of a dataset, then memory map, load in more, memory map etc..
-    # So that the memory mapped file is a concatenated version?
-
-    # what if I create a massive file with NAN, then sequentially map data to it?
-    # Then, I sequentially search for NaN start, removing the existing NaN and have an automatic
-    # method to map the dataset?
-
-    # you could also sequentially read in data, saving the shape/size of the dataset
-
-    a = 1
