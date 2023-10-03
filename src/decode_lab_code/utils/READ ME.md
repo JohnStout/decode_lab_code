@@ -1,5 +1,12 @@
 READ ME
 
+TODO: 
+
+        Make a base class that all decode_lab_code objects inherit. This will restrict organization across different coding patterns
+
+
+
+
 image_utils: This is a group of functions for processing imaging data.
         It was designed for calcium imaging and is currently in progress.
         The most useful function is stacktiffs, which takes a bunch of .tif

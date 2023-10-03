@@ -59,14 +59,29 @@ from decode_lab_code.utils import read_vt_data
 print("Cite NWB")
 print("Cite CatalystNeuro: NeuroConv toolbox if converting Neuralynx data")
 
-# this class is for converting NWB data.
-class nwb_utils():
-
+# Parent classs
+# TODO: Eventually, make this parent class a base function that all decode_lab_code methods will inherit
+class base():
     def __init__(self, folder_path: str):
-        # initialize some general variables
+
+        # a tracker variable
         self.history = []
-        self.history.append("Added folder path")
+
+        # define a folder path
         self.folder_path = folder_path
+        self.history.append("folder_path: directory of data - added")
+
+        # assign session ID according to your folder path
+        #folder_path = '/Users/js0403/local data/2020-06-26_16-56-10 9&10eb male ACTH ELS'
+        self.session_id = self.folder_path.split('/')[len(self.folder_path.split('/'))-1]
+        self.history.append("session_id: session identification variables - added")
+
+        # get list of contents in the directory
+        self.dir_contents = sorted(os.listdir(self.folder_path))
+        self.history.append("dir_contents: the contents in the current directory - added")
+
+# this class is for converting NWB data.
+class nwb_utils(base):
 
     def read_nwb(self, data_name: str):
         """
@@ -81,7 +96,7 @@ class nwb_utils():
 
         return nwb_file
 
-    def write_nwb(data_name = None, nwb_file=None):
+    def write_nwb(self,data_name = None, nwb_file=None):
         """
             Write NWB files
 
@@ -96,7 +111,7 @@ class nwb_utils():
         with NWBHDF5IO(self.folder_path+'/'+data_name, "w") as io:
             io.write(nwb_file)
 
-        print("Wrote nwb_file to: ",folder_name+'/'+data_name)
+        print("Wrote nwb_file to: ",self.folder_name+'/'+data_name)
 
     def generate_nwb_sheet(self):
         """
@@ -106,13 +121,18 @@ class nwb_utils():
 
         """
 
-    def nlx2nwb(self, save_name = 'data_nwb', nwb_sheet_directory = None):
+    def nlx2nwb(self, save_name = 'data_nwb', csc_data_dict: dict = None, tt_data_dict: dict = None, nwb_sheet_directory = None, ):
         """
+
+        TODO: Add csc_data_dict and tt_data_dict as inputs so that you can control nwb
+
         Write an NWB file using ephys data collected with neuralynx acquisition system
 
         ---------------------------------------
         Args:
             folder_path: string input that defines the directory to extract data
+            TODO: Add arguments for csc_data, tt_data, etc.. 
+            You want to tell the code where to store these items in the NWB
 
         Optional Args:
             save_name: defaults to 'data_nwb', but you could redefine this
@@ -166,128 +186,6 @@ class nwb_utils():
                         dt2['date'] + ' ' + dt2['time'], hpd['datetimeformat'])
         """
 
-        # Use Neo package
-        print("Cite Neo https://github.com/NeuralEnsemble/python-neo/blob/master/CITATION.txt")
-
-        # assign session ID according to your folder path
-        #folder_path = '/Users/js0403/local data/2020-06-26_16-56-10 9&10eb male ACTH ELS'
-        session_id = self.folder_path.split('/')[len(self.folder_path.split('/'))-1]
-
-        # here's the hack. 
-        # Loop over files of interest, 
-        # sort according to clustered or non-clustered, 
-        # load as such using Neo
-        # organize into a dictionary
-        # save outputs as components of the NWB file
-        dir_contents = sorted(os.listdir(self.folder_path))
-
-        # TODO: Add a line that ignores folders. Right now, if a folder was named "CSC", it'll be
-        # grouped into this code and an error will spit out
-
-        # group our data together
-        csc_names = []; idx_rem = []; tt_names = []
-        for ci in dir_contents:
-            if 'csc' in ci.lower():
-                csc_names.append(ci)
-            elif 'tt' in ci.lower():
-                tt_names.append(ci)
-        
-        # Separate the TT files into .ncs and .ntt types. They will be handled differently
-        tt_ncs = []; tt_ntt = []
-        for ti in tt_names:
-            if 'ncs' in ti.lower():
-                tt_ncs.append(ti)
-            elif 'ntt' in ti.lower():
-                tt_ntt.append(ti)
-            
-        # now we need to handle the processing aspect of the dataset. This is important for NWB generation
-        tt_ntt_raw = []; tt_ntt_filt = []; tt_ntt_clust = []
-        for ti in tt_ntt:
-            if 'clust' in ti.lower():
-                tt_ntt_clust.append(ti)
-            elif 'filt' in ti.lower() and not 'clust' in ti.lower():
-                tt_ntt_filt.append(ti)
-            elif 'filt' != ti.lower() and 'clust' != ti.lower():
-                tt_ntt_raw.append(ti)
-
-        # sort files
-        def atoi(text):
-            return int(text) if text.isdigit() else text
-        def natural_keys(text):
-            return [atoi(c) for c in re.split('(\d+)',text) ]
-
-        # sort
-        csc_names.sort(key=natural_keys)
-        tt_ncs.sort(key=natural_keys)
-        tt_ntt_raw.sort(key=natural_keys)
-        tt_ntt_filt.sort(key=natural_keys)
-        tt_ntt_clust.sort(key=natural_keys)
-
-        # now lets put these into a dict for working with in NeuralynxIO
-        neural_dict = {'CSC': csc_names, 
-                        'TT_CSC': tt_ncs, 
-                        'TT_Raw': tt_ntt_raw,
-                        'TT_Filt': tt_ntt_filt,
-                        'TT_Clust': tt_ntt_clust}
-        
-        # Here we create separate dictionaries containing datasets with their corresponding labels
-        dict_keys = neural_dict.keys()
-        csc_data = dict(); tt_csc_data = dict(); tt_raw_data = dict()
-        tt_filt_data = dict(); tt_clust_data = dict()
-        for groupi in dict_keys: # grouping variable to get TT data
-            print("Working with ",groupi)
-            for datai in neural_dict[groupi]: # now we can get data
-
-                # read data using Neo's NeuralynxIO
-                if 'blks' in locals():
-                    del blks
-                blks = NeuralynxIO(filename=self.folder_path+'/'+datai, keep_original_times=True).read(lazy=False) # blocks
-                #blks = NeuralynxRawIO(filename =folder_path+'/'+datai).parse_header()
-
-                if len(blks) > 1:
-                    TypeError("Blocks exceeding size 1. This indicates that multiple sessions detected. The following code will be terminated.")
-
-                # get blocked data
-                blk = blks[0]
-
-                # organize data accordingly
-                if 'CSC' in groupi and 'TT' not in groupi: # CSC files referenced to a different channel
-                    csc_data[datai] = blk.segments[0].analogsignals[0].magnitude
-                    csc_times = blk.segments[0].analogsignals[0].times
-
-                elif 'TT_CSC' in groupi: # CSC files from Tetrodes referenced locally
-                    tt_csc_data[datai] = blk.segments[0].analogsignals[0].magnitude
-
-                # Notice that all values are duplicated. This is because tetrodes record the same spike times.
-                # It is the amplitude that varies, which is not captured here, despite calling magnitude.
-                elif 'TT_Raw' in groupi: # .ntt TT files with spike data
-                    spikedata = blk.segments[0].spiketrains
-                    num_tts = len(spikedata)
-                    temp_dict = dict()
-                    for i in range(num_tts):
-                        temp_dict['channel'+str(i)+'spiketimes'] = spikedata[i].magnitude
-                    tt_raw_data[datai] = temp_dict
-
-                elif 'TT_Filt' in groupi: # filtered spike signals
-                    spikedata = blk.segments[0].spiketrains
-                    num_tts = len(spikedata)
-                    temp_dict = dict()
-                    for i in range(num_tts):
-                        temp_dict['channel'+str(i)+'spiketimes'] = spikedata[i].magnitude
-                    tt_filt_data[datai] = temp_dict
-
-                # This represents spike times of each cluster, per tetrode. So it looks duplicated.
-                # Cross referenced these with clustered data. Ignore first cluster - it's noise.
-                elif 'TT_Clust' in groupi: # clustered data (N spiketrains = N units)
-                    spikedata = blk.segments[0].spiketrains
-                    num_trains = len(spikedata) # there will be 4x the number of clusters extracted
-                    num_clust = int(num_trains/4) # /4 because there are 4 tetrodes
-                    temp_dict = dict()
-                    for i in range(num_clust):
-                        if i > 0: # skip first cluster, it's noise
-                            temp_dict['cluster'+str(i)+'spiketimes'] = spikedata[i].magnitude
-                    tt_clust_data[datai] = temp_dict
-
         #%%
 
         # Extract header information to document the NWB file
@@ -295,15 +193,15 @@ class nwb_utils():
         # attempt to read files until you get a header
         next = 0; looper = 0
         while next == 0:
-            ncs_file = [i for i in dir_contents if '.ncs' in i.lower()][looper]
-            reader = NeuralynxRawIO(filename = os.path.join(self.folder_path,dir_contents[looper]))
+            ncs_file = [i for i in self.dir_contents if '.ncs' in i.lower()][looper]
+            reader = NeuralynxRawIO(filename = os.path.join(self.folder_path,self.dir_contents[looper]))
             reader.parse_header()
             file_header = reader.file_headers
             if bool(file_header) is False:
                 looper = looper+1
             else:
                 next = 1
-            if looper == len(dir_contents)-1:
+            if looper == len(self.dir_contents)-1:
                 raise ValueError('Could not extract information from header')
 
         # time information for NWB
@@ -315,7 +213,7 @@ class nwb_utils():
 
         # interface with the user
         #folder_path = input("Enter directory of recording session: ")
-        recording_notes = input("Enter information about your recording wires (e.g. TT1 wasn't working great today...)")
+        #recording_notes = input("Enter information about your recording wires (e.g. TT1 wasn't working great today...)")
 
         # create NWB file
         nwbfile = NWBFile(
@@ -325,7 +223,7 @@ class nwb_utils():
             experimenter = input("Enter the name(s) of the experimenter(s): "),
             lab="Hernan Lab",
             institution="Nemours Children's Hospital",
-            session_id=session_id,
+            session_id=self.session_id
         )
 
         # enter subject specific information
@@ -430,33 +328,21 @@ class nwb_utils():
 
         #%% Add behavioraly relevant times
 
+        #%% Save NWB file
+
+
 #%%
 
 # a specific class for unpacking neuralynx data
-class read_nlx():
+class read_nlx(base):
 
-    def __init__(self, folder_path:str):
-
-        # a tracker variable
-        self.history = []
-
-        # define a folder path
-        self.folder_path = folder_path
-        self.history.append("folder_path: directory of data - added")
-
-        # assign session ID according to your folder path
-        #folder_path = '/Users/js0403/local data/2020-06-26_16-56-10 9&10eb male ACTH ELS'
-        self.session_id = self.folder_path.split('/')[len(self.folder_path.split('/'))-1]
-        self.history.append("session_id: session identification variables - added")
-
-        # here's the hack. 
-        # Loop over files of interest, 
-        # sort according to clustered or non-clustered, 
-        # load as such using Neo
-        # organize into a dictionary
-        # save outputs as components of the NWB file
-        self.dir_contents = sorted(os.listdir(self.folder_path))
-        self.history.append("dir_contents: the contents in the current directory - added")
+    def read_all(self):
+        """
+        TODO: read all data at once
+        Argument that allows the user to read all information from a file using the methods
+        ascribed below
+        """
+        pass
 
     def read_ephys(self, opts = None):
 
@@ -477,32 +363,28 @@ class read_nlx():
         # TODO: group data by file type, then separate by common naming conventions so that we never
         # have to worry about changing naming conventions
 
+        # group data according to extension, then by naming
+        split_contents = [i.split('.') for i in self.dir_contents]
 
-        # group our data together
-        csc_names = []; idx_rem = []; tt_names = []
+        # extract extension values
+        ext = [split_contents[i][1] for i in range(len(split_contents)) if len(split_contents[i])>1]
+
+        # extract pre-extension names, if . was used to split
+        pre_ext = [split_contents[i][0] for i in range(len(split_contents)) if len(split_contents[i])>1]
+
+        # group extensions
+        unique_ext = np.unique(ext) # can test for unique extension names
+
+        # here is a way to do a letter-to-digit search and return letter combo
+        #naming = "".join([i for i in pre_ext[10] if i.isdigit()==False])
+
+        # group data based on extension type
+        csc_names = []; tt_names = []
         for ci in self.dir_contents:
-            if 'csc' in ci.lower():
+            if '.ncs' in ci.lower():
                 csc_names.append(ci)
-            elif 'tt' in ci.lower():
+            elif '.ntt' in ci.lower():
                 tt_names.append(ci)
-        
-        # Separate the TT files into .ncs and .ntt types. They will be handled differently
-        tt_ncs = []; tt_ntt = []
-        for ti in tt_names:
-            if 'ncs' in ti.lower():
-                tt_ncs.append(ti)
-            elif 'ntt' in ti.lower():
-                tt_ntt.append(ti)
-            
-        # now we need to handle the processing aspect of the dataset. This is important for NWB generation
-        tt_ntt_raw = []; tt_ntt_filt = []; tt_ntt_clust = []
-        for ti in tt_ntt:
-            if 'clust' in ti.lower():
-                tt_ntt_clust.append(ti)
-            elif 'filt' in ti.lower() and not 'clust' in ti.lower():
-                tt_ntt_filt.append(ti)
-            elif 'filt' != ti.lower() and 'clust' != ti.lower():
-                tt_ntt_raw.append(ti)
 
         # sort files
         def atoi(text):
@@ -512,24 +394,18 @@ class read_nlx():
 
         # sort
         csc_names.sort(key=natural_keys)
-        tt_ncs.sort(key=natural_keys)
-        tt_ntt_raw.sort(key=natural_keys)
-        tt_ntt_filt.sort(key=natural_keys)
-        tt_ntt_clust.sort(key=natural_keys)
+        tt_names.sort(key=natural_keys)
 
         # now lets put these into a dict for working with in NeuralynxIO
         neural_dict = {'CSC': csc_names, 
-                        'TT_CSC': tt_ncs, 
-                        'TT_Raw': tt_ntt_raw,
-                        'TT_Filt': tt_ntt_filt,
-                        'TT_Clust': tt_ntt_clust}
+                        'TT': tt_names}
         
         # Here we create separate dictionaries containing datasets with their corresponding labels
         dict_keys = neural_dict.keys()
-        self.csc_data = dict(); self.tt_csc_data = dict(); self.tt_raw_data = dict()
-        self.tt_filt_data = dict(); self.tt_clust_data = dict()
+        self.csc_data = dict(); self.tt_data = dict()
+        csc_added = False; tt_added = False
         for groupi in dict_keys: # grouping variable to get TT data
-            print("Working with ",groupi)
+            print("Working with",groupi)
             for datai in neural_dict[groupi]: # now we can get data
 
                 # read data using Neo's NeuralynxIO
@@ -545,53 +421,68 @@ class read_nlx():
                 blk = blks[0]
 
                 # organize data accordingly
-                if 'CSC' in groupi and 'TT' not in groupi: # CSC files referenced to a different channel
+                if 'CSC' in groupi: # CSC files referenced to a different channel
                     self.csc_data[datai] = blk.segments[0].analogsignals[0].magnitude
                     self.csc_times = blk.segments[0].analogsignals[0].times
-
-                elif 'TT_CSC' in groupi: # CSC files from Tetrodes referenced locally
-                    self.tt_csc_data[datai] = blk.segments[0].analogsignals[0].magnitude
+                    csc_added = True
 
                 # Notice that all values are duplicated. This is because tetrodes record the same spike times.
                 # It is the amplitude that varies, which is not captured here, despite calling magnitude.
-                elif 'TT_Raw' in groupi: # .ntt TT files with spike data
+                elif 'TT' in groupi: # .ntt TT files with spike data
                     spikedata = blk.segments[0].spiketrains
                     num_tts = len(spikedata)
-                    temp_dict = dict()
-                    for i in range(num_tts):
-                        temp_dict['channel'+str(i)+'spiketimes'] = spikedata[i].magnitude
-                    self.tt_raw_data[datai] = temp_dict
+                    if num_tts > 4:
+                        print("Detected clustered data in",datai)
+                        num_trains = len(spikedata) # there will be 4x the number of clusters extracted
+                        num_clust = int(num_trains/4) # /4 because there are 4 tetrodes
+                        temp_dict = dict()
+                        for i in range(num_clust):
+                            if i > 0: # skip first cluster, it's noise
+                                temp_dict['cluster'+str(i)+'spiketimes'] = spikedata[i].magnitude
+                        self.tt_data[datai] = temp_dict
+                    else:
+                        temp_dict = dict()
+                        for i in range(num_tts):
+                            temp_dict['channel'+str(i)+'spiketimes'] = spikedata[i].magnitude
+                        self.tt_data[datai] = temp_dict
+                    tt_added = True
 
-                elif 'TT_Filt' in groupi: # filtered spike signals
-                    spikedata = blk.segments[0].spiketrains
-                    num_tts = len(spikedata)
-                    temp_dict = dict()
-                    for i in range(num_tts):
-                        temp_dict['channel'+str(i)+'spiketimes'] = spikedata[i].magnitude
-                    self.tt_filt_data[datai] = temp_dict
-
-                # This represents spike times of each cluster, per tetrode. So it looks duplicated.
-                # Cross referenced these with clustered data. Ignore first cluster - it's noise.
-                elif 'TT_Clust' in groupi: # clustered data (N spiketrains = N units)
-                    spikedata = blk.segments[0].spiketrains
-                    num_trains = len(spikedata) # there will be 4x the number of clusters extracted
-                    num_clust = int(num_trains/4) # /4 because there are 4 tetrodes
-                    temp_dict = dict()
-                    for i in range(num_clust):
-                        if i > 0: # skip first cluster, it's noise
-                            temp_dict['cluster'+str(i)+'spiketimes'] = spikedata[i].magnitude
-                    self.tt_clust_data[datai] = temp_dict
+        # get keys of dictionary
+        if csc_added is True:
+            self.csc_data_names = csc_names
+            self.history.append("csc_data: CSC data as grouped by ext .ncs")
+            self.history.append("csc_data_names: names of data in csc_data as organized by .ncs files")
+        
+        if tt_added is True:
+            self.history.append("tt_data: Tetrode data as grouped by ext .ntt")
+            self.history.append("tt_data_names: names of data in tt_data as organized by .ntt files")
+            self.tt_data_names = tt_names
 
     def read_vt(self):
 
         # Get VT data from .NVT files
-        vt_name = [i for i in dir_contents if '.nvt' in i.lower()][0]
+        vt_name = [i for i in self.dir_contents if '.nvt' in i.lower()][0]
 
         # get video tracking data if it's present
         filename = os.path.join(self.folder_path,vt_name)
         vt_data = read_vt_data.read_nvt(filename = filename)
-        vt_x = vt_data['Xloc']
-        vt_y = vt_data['Yloc']
-        vt_t = vt_data['TimeStamp']
+        self.vt_x = vt_data['Xloc']
+        self.vt_y = vt_data['Yloc']
+        self.vt_t = vt_data['TimeStamp']
+
+        # add history
+        self.history.append("vt_x: x-position data obtained from .nvt files")
+        self.history.append("vt_y: y-position data obtained from .nvt files")
+        self.history.append("vt_t: timestamp data obtained from .nvt files")
+
+
+    def read_events(self):
+
+        """
+        TODO: Read events information
+        
+        """
+
+        pass
 
 
