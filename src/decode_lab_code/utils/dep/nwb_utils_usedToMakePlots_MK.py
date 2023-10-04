@@ -42,7 +42,7 @@ import numpy as np
 from neo.io.neuralynxio import NeuralynxIO
 #from neo.io.neuralynxio import NeuralynxRawIO
 
-from decode_lab_code.utils import read_vt_data
+from decode_lab_code.utils.dep import read_vt_data
 
 print("Cite NWB")
 print("Cite CatalystNeuro: NeuroConv toolbox if converting Neuralynx data")

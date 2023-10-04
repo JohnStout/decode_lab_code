@@ -47,7 +47,7 @@ from pynwb.ophys import (
     TwoPhotonSeries,
 )
 
-from decode_lab_code.utils.nwb_utils import write_nwb
+from decode_lab_code.utils.dep.nwb_utils import write_nwb
 
 # ------------------------------------------------- #
 

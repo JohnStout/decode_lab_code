@@ -42,45 +42,27 @@ import re
 
 import os
 
-# work on deprecating neuroconv. No need
-from neuroconv.datainterfaces import NeuralynxRecordingInterface # not sure why this variable is whited out
+from typing import Dict, Union, List, Tuple
 
+# pynwb
 from pynwb import NWBHDF5IO, NWBFile
 from pynwb.ecephys import LFP, ElectricalSeries
 from pynwb.file import Subject
 
+# numpy
 import numpy as np
 
+# neo: TODO: modify neo function rawio/neuralyxrawio/nlxheader
 from neo.io.neuralynxio import NeuralynxIO
 from neo.io.neuralynxio import NeuralynxRawIO
 
-from decode_lab_code.utils import read_vt_data
+# our labs code (folder "core", file "base", class "base")
+from decode_lab_code.core.base import base # this is a core base function to organize data
 
 print("Cite NWB")
 print("Cite CatalystNeuro: NeuroConv toolbox if converting Neuralynx data")
 
-# Parent classs
-# TODO: Eventually, make this parent class a base function that all decode_lab_code methods will inherit
-class base():
-    def __init__(self, folder_path: str):
-
-        # a tracker variable
-        self.history = []
-
-        # define a folder path
-        self.folder_path = folder_path
-        self.history.append("folder_path: directory of data - added")
-
-        # assign session ID according to your folder path
-        #folder_path = '/Users/js0403/local data/2020-06-26_16-56-10 9&10eb male ACTH ELS'
-        self.session_id = self.folder_path.split('/')[len(self.folder_path.split('/'))-1]
-        self.history.append("session_id: session identification variables - added")
-
-        # get list of contents in the directory
-        self.dir_contents = sorted(os.listdir(self.folder_path))
-        self.history.append("dir_contents: the contents in the current directory - added")
-
-# this class is for converting NWB data.
+# inherit the "core" __init__ from "base" object
 class nwb_utils(base):
 
     def read_nwb(self, data_name: str):
@@ -120,6 +102,13 @@ class nwb_utils(base):
         It can then be loading into the nwb creation functions
 
         """
+
+    def nwb2nlx(self):
+        """
+        TODO: This function will read in the nwb file, then extract LFPs and spiking into dictionary arrays, like
+        the output from read_ephys
+        """
+        pass
 
     def nlx2nwb(self, save_name = 'data_nwb', csc_data_dict: dict = None, tt_data_dict: dict = None, nwb_sheet_directory = None, ):
         """
@@ -420,15 +409,41 @@ class read_nlx(base):
                 # get blocked data
                 blk = blks[0]
 
+                # TODO: Handle multisegments (CSC1 from /Users/js0403/local data/2020-06-26_16-56-10 9&10eb male ACTH ELS)
+                # You can probably just combine the csc_times and csc_data into one vector
+
+                # TODO: Get sampling rate
+
                 # organize data accordingly
                 if 'CSC' in groupi: # CSC files referenced to a different channel
-                    self.csc_data[datai] = blk.segments[0].analogsignals[0].magnitude
-                    self.csc_times = blk.segments[0].analogsignals[0].times
+                    
+                    if len(blk.segments) > 1:
+                        blk_logger = ("Multiple blocks detected in "+datai+". LFP and LFP times have been collapsed into a single array.")
+                        print(blk_logger)
+                        temp_csc = []; temp_times = []
+                        for segi in range(len(blk.segments)):
+                            temp_csc.append(blk.segments[segi].analogsignals[0].magnitude)
+                            temp_times.append(blk.segments[segi].analogsignals[0].times)
+                        self.csc_data[datai] = np.vstack(temp_csc)
+                        self.csc_times = np.hstack(temp_times) # only need to save one. TODO: make more efficient
+                    else:                   
+                        self.csc_data[datai] = blk.segments[0].analogsignals[0].magnitude
+                        self.csc_times = blk.segments[0].analogsignals[0].times
+                        
+                    # add sampling rate if available
+                    if 'csc_fs' not in locals():
+                        temp_fs = str(blk.segments[0].analogsignals[0].sampling_rate)
+                        csc_fs = int(temp_fs.split('.')[0])
+                        self.csc_data_fs = csc_fs
                     csc_added = True
 
                 # Notice that all values are duplicated. This is because tetrodes record the same spike times.
                 # It is the amplitude that varies, which is not captured here, despite calling magnitude.
                 elif 'TT' in groupi: # .ntt TT files with spike data
+
+                    if len(blk.segments) > 1:
+                        InterruptedError("Detected multiple stop/starts in spike times. No code available to collapse recordings. Please add code")
+
                     spikedata = blk.segments[0].spiketrains
                     num_tts = len(spikedata)
                     if num_tts > 4:
@@ -446,17 +461,24 @@ class read_nlx(base):
                             temp_dict['channel'+str(i)+'spiketimes'] = spikedata[i].magnitude
                         self.tt_data[datai] = temp_dict
                     tt_added = True
+                    self.tt_data_fs = int(32000) # hardcoded
+
+        # history tracking
+        if 'blk_logger' in locals():
+            self.history.append("LOGGER: csc_data had multiple blocks. This is likely due to multiple start/stops when recording. LFP and times were concatenated into a single array.")
 
         # get keys of dictionary
         if csc_added is True:
             self.csc_data_names = csc_names
             self.history.append("csc_data: CSC data as grouped by ext .ncs")
             self.history.append("csc_data_names: names of data in csc_data as organized by .ncs files")
-        
+            self.history.append("csc_data_fs: sampling rate for CSC data, defined by .ncs extension")
+
         if tt_added is True:
+            self.tt_data_names = tt_names
             self.history.append("tt_data: Tetrode data as grouped by ext .ntt")
             self.history.append("tt_data_names: names of data in tt_data as organized by .ntt files")
-            self.tt_data_names = tt_names
+            self.history.append("tt_data_fs: hard coded to 32kHz after not detected neo extraction of sampling rate")
 
     def read_vt(self):
 
@@ -465,7 +487,11 @@ class read_nlx(base):
 
         # get video tracking data if it's present
         filename = os.path.join(self.folder_path,vt_name)
-        vt_data = read_vt_data.read_nvt(filename = filename)
+        # Example usage:
+
+        # data = read_nvt("path_to_your_file.nvt")
+
+        vt_data = read_nvt(filename = filename)
         self.vt_x = vt_data['Xloc']
         self.vt_y = vt_data['Yloc']
         self.vt_t = vt_data['TimeStamp']
@@ -475,6 +501,86 @@ class read_nlx(base):
         self.history.append("vt_y: y-position data obtained from .nvt files")
         self.history.append("vt_t: timestamp data obtained from .nvt files")
 
+        def read_nvt(filename: str) -> Union[Dict[str, np.ndarray], None]:
+            """
+            Reads a NeuroLynx NVT file and returns its data.
+
+            Parameters
+            ----------
+            filename : str
+                Path to the NVT file.
+
+            Returns
+            -------
+            Union[Dict[str, np.ndarray], None]
+                Dictionary containing the parsed data if file exists, None otherwise.
+
+            Raises
+            ------
+            FileNotFoundError
+                If the specified file does not exist.
+
+
+            Ben Dichtor wrote code
+            """
+            
+            # Constants for header size and record format
+            HEADER_SIZE = 16 * 1024
+            RECORD_FORMAT = [
+                ("swstx", "uint16"),
+                ("swid", "uint16"),
+                ("swdata_size", "uint16"),
+                ("TimeStamp", "uint64"),
+                ("dwPoints", "uint32", 400),
+                ("sncrc", "int16"),
+                ("Xloc", "int32"),
+                ("Yloc", "int32"),
+                ("Angle", "int32"),
+                ("dntargets", "int32", 50),
+            ]
+            
+            # Check if file exists
+            if not os.path.exists(filename):
+                raise FileNotFoundError(f"File {filename} not found.")
+            
+            # Reading and parsing data
+            with open(filename, 'rb') as file:
+                file.seek(HEADER_SIZE)
+                dtype = np.dtype(RECORD_FORMAT)
+                records = np.fromfile(file, dtype=dtype)
+                return {name: records[name].squeeze() for name, *_ in RECORD_FORMAT}
+
+        def handle_missing_data(filename: str, missing_data = None):
+
+            """
+            Reads neuralynx NVT files and handles missing data
+
+            TODO: add interpolation of missing data. Might be good as a method of a class
+
+            Args:
+                filename: directory of data with .nvt extension
+                missing_data: str, option to handle missing data. Default = None.
+                                Accepts: 
+                                    'NaN': makes 0 values nan
+
+            Ben Dichtor wrote code. John Stout wrapped into function
+
+            """
+
+            # read data
+            data = read_nvt(filename)
+
+            # make 0s nan
+            if missing_data == 'NaN':
+                x = data["Xloc"].astype(float)
+                x[data["Xloc"] <= 0] = np.nan
+
+                y = data["Yloc"].astype(float)
+                y[data["Yloc"] <= 0] = np.nan
+
+                t = data["Tloc"].astype(float)
+
+            return x,y,t
 
     def read_events(self):
 
