@@ -14,10 +14,10 @@
 #
 # -JS
 
-#%% 
+# %%
 
 # importing packages/modules
-from decode_lab_code.preprocessing.ophys.caiman_wrapper import caiman_preprocess
+from decode_lab_code.preprocessing.caiman_wrapper import caiman_preprocess
 
 import matplotlib.pyplot as plt
 
@@ -59,37 +59,29 @@ extension = '.tif'
 #folder_name = '/Users/js0403/ophysdata/Akanksha_data'
 #file_name = 'Movie_21'
 #extension = '.tif'
-frame_rate = 15 # OG sampling rate was 30. The data has been temporally downsampled in script_downsample_data
+frame_rate = 10 # OG sampling rate was 30. The data has been temporally downsampled in script_downsample_data
 
+fname = [download_demo(file_name+extension,folder_name)]
+movieFrames = cm.load_movie_chain(fname,fr=frame_rate) # frame rate = 30f/s
+movieFrames.play()
+
+# initialize the caiman_preprocess object for fast tools
 cp = caiman_preprocess(folder_name,file_name+extension,frame_rate,activate_cluster=False)
 
 #%%
-
-# watch movie
-cp.watch_movie()
-
-#%%
-
-# plot figure to determine cell size
-frameData = cp.get_frames()
-#plt.imshow(frameData[10,:,:])
-#plt.ylim(220, 190)
-#plt.xlim(50, 100)
-#plt.title("Neuron size ~= 10-13 pixels")
-
 # based on the visualization, 13 pixels is consistent with caiman
 # neuron_size = 13 # pixels - this can be adjusted as needed after visualizing results
 neuron_size = 15
 
 #%% lets identify a good patch size
 # patches were 192 for trevors
-patch_size = 150; patch_overlap = patch_size/2
+patch_size = 200; patch_overlap = patch_size/2
 cp.test_patch_size(patch_size,patch_overlap)
 
 # %%
 
 # dataset dependent parameters
-fname = cp.fname  # directory of data
+fname = fname  # directory of data
 fr = frame_rate   # imaging rate in frames per second
 decay_time = 0.4  # length of a typical transient in seconds
 
@@ -112,16 +104,16 @@ merge_thr = 0.85            # merging threshold, max correlation allowed
 rf = int(neuron_size*4)
 stride_cnmf = int(patch_size/4) # amount of overlap between the patches in pixels
 #K = 5                          # number of components per patch
-K = 25
+K = 5
 gSiz = (neuron_size,neuron_size) # estimate size of neuron
 gSig = [int(round(neuron_size-1)/2), int(round(neuron_size-1)/2)] # expected half size of neurons in pixels
 method_init = 'corr_pnr'    # greedy_roi, initialization method (if analyzing dendritic data using 'sparse_nmf'), if 1p, use 'corr_pnr'
-ssub = 1                    # spatial subsampling during initialization (2)
+ssub = 2                    # spatial subsampling during initialization (2)
 tsub = 1                    # temporal subsampling during intialization (1)
-ssub_B = 1                  # additional downsampling factor in space for background (2)
+ssub_B = 2                  # additional downsampling factor in space for background (2)
 low_rank_background = None  # None leaves background of each patch intact, True performs global low-rank approximation if gnb>0
 #gnb = 0                     # number of background components, gnb= 0: Return background as b and W, gnb=-1: Return full rank background B, gnb<-1: Don't return background
-nb_patch = 2                # number of background components (rank) per patch if gnb>0, else it is set automatically
+nb_patch = 2               # number of background components (rank) per patch if gnb>0, else it is set automatically
 ring_size_factor = 1.4      # radius of ring is gSiz*ring_size_factor
 
 # These values need to change based on the correlation image
@@ -199,6 +191,7 @@ opts_dict = {
 opts = params.CNMFParams(params_dict=opts_dict)
 
 #%% 
+# the interactive window hates this
 
 # start a cluster for parallel processing (if a cluster already exists it will be closed and a new session will be opened)
 if 'dview' in locals():
@@ -214,7 +207,7 @@ c, dview, n_processes = cm.cluster.setup_cluster(
 print("This might take a minute...")
 if motion_correct:
     # do motion correction rigid
-    mc = MotionCorrect(cp.fname, dview=dview, **opts.get_group('motion'))
+    mc = MotionCorrect(fname=fname,dview=dview, **opts.get_group('motion'))
     mc.motion_correct(save_movie=True)
     fname_mc = mc.fname_tot_els if pw_rigid else mc.fname_tot_rig
     if pw_rigid:
@@ -248,7 +241,7 @@ images = np.reshape(Yr.T, [T] + list(dims), order='F')
 # restart cluster to clean up memory
 cm.stop_server(dview=dview)
 c, dview, n_processes = cm.cluster.setup_cluster(
-    backend='local', n_processes=None, single_thread=False)
+    backend='ipyparallel', n_processes=None, single_thread=False)
 
 # %%
 

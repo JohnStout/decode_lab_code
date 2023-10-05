@@ -3,7 +3,7 @@
 # written by John Stout
 
 # importing packages/modules
-from decode_lab_code.preprocessing.ophys.caiman_wrapper import caiman_preprocess
+from decode_lab_code.preprocessing.caiman_wrapper import caiman_preprocess
 import glob
 
 # assign directory to downsample and convert data

@@ -14,7 +14,7 @@
 #%% 
 
 # importing packages/modules
-from decode_lab_code.preprocessing.ophys.caiman_wrapper import caiman_preprocess
+from decode_lab_code.preprocessing.caiman_wrapper import caiman_preprocess
 
 import matplotlib.pyplot as plt
 

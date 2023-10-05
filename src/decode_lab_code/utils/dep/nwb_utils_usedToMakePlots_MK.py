@@ -297,7 +297,7 @@ def nlx2nwb(folder_path: str, save_name = 'data_nwb', nwb_sheet_directory = None
 
 
     # TODO: make class for signal processing
-    from decode_lab_code.utils.signal_utils import process_signal
+    from decode_lab_code.preprocessing.signal_utils import process_signal
 
     fig, axes = plt.subplots(nrows = 2, ncols = 1)
     sig1 = process_signal(data = temp_data)

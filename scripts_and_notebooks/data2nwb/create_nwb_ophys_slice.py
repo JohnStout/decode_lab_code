@@ -29,7 +29,7 @@ from pynwb.ophys import (
     TwoPhotonSeries,
 )
 
-from decode_lab_code.preprocessing.ophys.caiman_wrapper import caiman_preprocess
+from decode_lab_code.preprocessing.caiman_wrapper import caiman_preprocess
 
 session_start_time = datetime(2018, 4, 25, 2, 30, 3, tzinfo=tz.gettz("US/Pacific"))
 # initialize the nwbfile

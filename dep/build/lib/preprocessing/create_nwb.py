@@ -48,7 +48,7 @@ class nwbfile:
         envSet = input("Is your environment set to caiman? [Y/N]")
         if envSet == 'y' or envSet == 'Y':
             # lets load in our caiman wrapper
-            from decode_lab_code.preprocessing.ophys.caiman_wrapper import caiman_preprocess
+            from decode_lab_code.preprocessing.caiman_wrapper import caiman_preprocess
             
             # directory information
             folder_name = input("Enter the folder name for your data: ")

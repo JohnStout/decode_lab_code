@@ -1,4 +1,4 @@
-from decode_lab_code.preprocessing.ophys.caiman_wrapper import caiman_preprocess as cp
+from decode_lab_code.preprocessing.caiman_wrapper import caiman_preprocess as cp
 
 class data2nwb():
     def __init__(self, folder_name: str, file_name: str):
