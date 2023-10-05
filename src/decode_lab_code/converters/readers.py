@@ -27,13 +27,13 @@ from decode_lab_code.utils.neuralynxio import NeuralynxIO
 from decode_lab_code.utils import nlxhelper
 
 # our labs code (folder "core", file "base", class "base")
-from decode_lab_code.core.base import base # this is a core base function to organize data
+from decode_lab_code.core.base import base_converter # this is a core base function to organize data
 
 print("Cite NWB")
 print("Cite CatalystNeuro: NeuroConv toolbox if converting Neuralynx data")
 
 # a specific class for unpacking neuralynx data
-class read_nlx(base):
+class read_nlx(base_converter):
 
     def read_all(self):
         """

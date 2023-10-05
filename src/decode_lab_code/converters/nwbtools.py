@@ -1,5 +1,10 @@
 # converters.py
 #
+# Take a data type, then convert to something usable, like a dict or NWB file
+# Load a data type into workspace, like NWB into dict or dict into NWB
+#
+#
+#
 # This collection of objects will support the conversion of data into something readible for NWB input/output
 #
 # 
@@ -57,13 +62,13 @@ from neo.io.neuralynxio import NeuralynxIO
 from neo.io.neuralynxio import NeuralynxRawIO
 
 # our labs code (folder "core", file "base", class "base")
-from decode_lab_code.core.base import base # this is a core base function to organize data
+from decode_lab_code.core.base import base_converter # this is a core base function to organize data
 
 print("Cite NWB")
 print("Cite CatalystNeuro: NeuroConv toolbox if converting Neuralynx data")
 
 # inherit the "core" __init__ from "base" object
-class nwb_wrangle(base):
+class nwb_convert(base_converter):
 
     def read_nwb(self, data_name: str):
         """

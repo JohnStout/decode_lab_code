@@ -13,55 +13,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
 
+from decode_lab_code.core.base import base_preprocess
+
 # TODO: implement base inheritence to at least keep a track record of where this dataset is coming from
 
-class process_signal:
+class process_signal(base_preprocess):
 
     """
     process_signal: a class designed for working with LFP/EEG data
     
     """
-
-    def __init__(self, data: float, fs: int):
-
-        """
-        Args:
-            data: numpy array vector. Will be reshaped as needed.
-            fs: sampling rate as an integer
-
-            TODO: implement a way to detect if input is a list of signals
-        """
-
-        # tracking signal processing steps
-        self.history = [] # list
-
-        # make sure we don't work with wrong kind of data
-        if type(data) is dict:
-            self.data = dict()
-            csc_ids = data.keys()
-            for csci in csc_ids:
-                if len(data[csci].shape) > 1:
-                    self.data[csci] = np.reshape(data[csci],len(data[csci]))
-            self.history.append("Reshaped data arrays to 1D")
-
-        # if just working with a single array, convert to dict
-        if type(data) is np.array:
-            # TODO: Make this compatible with dictionary type processing
-
-            # check the shape of the data and fix as needed
-            if len(data.shape) > 1:
-
-                # you have to reshape if you want any filtering to actually work
-                self.data = np.reshape(data,len(data))
-
-                # store a history of what you've done
-                self.history.append("Reshaped data array to 1D array")
-
-            else:
-                self.data = data
-
-        # store sampling rate
-        self.fs = fs
 
     def rereference(self, rereference_mode: str = 'CAR'):
         """
