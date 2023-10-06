@@ -2,7 +2,7 @@
 
  A python toolbox to support analyses performed in the DECODE lab at Nemours Childrens Hospital in Wilmington DE, led by A.Hernan and R.Scott
 
-Goal: develop an open-source package to lower the energy barrier between data storage/loading, analysis, and visualization. New students should focus on experiments, analysis, and visualization with minimal programming knowledge.
+**Goal:** develop an open-source package to lower the energy barrier between data storage/loading, analysis, and visualization. New students should focus on experiments, analysis, and visualization with minimal programming knowledge.
 
 **Some dependencies:**
 - neo
