@@ -7,19 +7,27 @@
 
 import os
 import numpy as np
+import matplotlib.pyplot as plt
+import pynwb
 
-class base_converter():
+# this class is for putting directories into the pipeline
+class base():
 
     """
-    A class of methods that will serve as integral for objects in the wrangle folder
+    A class of methods that will serve as integral for objects in the converters folder
     
     """
 
-    def __init__(self, folder_path: str):
+    def __init__(self, folder_path:str):
 
         """
         Args:
+            You must either specify folder_path OR data
+
             folder_path: Directory of dataset
+            data: dataset of interest
+            fs: required if data is specified
+
         """
 
         # a tracker variable
@@ -38,63 +46,5 @@ class base_converter():
         self.dir_contents = sorted(os.listdir(self.folder_path))
         self.history.append("dir_contents: the contents in the current directory - added")
 
-class base_preprocess():
-
-    """
-    A general group of methods to be inherited for preprocessing purposes.
-
-    This code will be inherited by preprocessing. 
-
-    TODO: Add an exception for NWB data types, where it converts that nwb file to dict
-
-    # TODO: Should this inherit the .history approach like above?. Might not be able to bc
-    folder_path is not available
 
     
-    """
-
-    def __init__(self, data, fs: int):
-
-        """
-
-        Accepts inputs of numpy arrays or dictionaries.
-
-        Preferred input is a data that is a dictionary array
-
-        Args:
-            data: numpy array vector. Will be reshaped as needed.
-            fs: sampling rate as an integer
-
-            TODO: implement a way to detect if input is a list of signals
-        """
-
-        # tracking signal processing steps
-        self.history = [] # list
-
-        # make sure we don't work with wrong kind of data
-        if type(data) is dict:
-            self.data = dict()
-            csc_ids = data.keys()
-            for csci in csc_ids:
-                if len(data[csci].shape) > 1:
-                    self.data[csci] = np.reshape(data[csci],len(data[csci]))
-            self.history.append("Reshaped data arrays to 1D")
-
-        # if just working with a single array, convert to dict
-        if type(data) is np.array:
-            # TODO: Make this compatible with dictionary type processing
-
-            # check the shape of the data and fix as needed
-            if len(data.shape) > 1:
-
-                # you have to reshape if you want any filtering to actually work
-                self.data = np.reshape(data,len(data))
-
-                # store a history of what you've done
-                self.history.append("Reshaped data array to 1D array")
-
-            else:
-                self.data = data
-
-        # store sampling rate
-        self.fs = fs

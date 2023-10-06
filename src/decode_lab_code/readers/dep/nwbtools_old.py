@@ -62,13 +62,13 @@ from neo.io.neuralynxio import NeuralynxIO
 from neo.io.neuralynxio import NeuralynxRawIO
 
 # our labs code (folder "core", file "base", class "base")
-from decode_lab_code.core.base import base_converter # this is a core base function to organize data
+from decode_lab_code.core.base import base # this is a core base function to organize data
 
 print("Cite NWB")
 print("Cite CatalystNeuro: NeuroConv toolbox if converting Neuralynx data")
 
 # inherit the "core" __init__ from "base" object
-class nwb_convert(base_converter):
+class nwb_convert(base):
 
     def read_nwb(self, data_name: str):
         """
@@ -79,11 +79,11 @@ class nwb_convert(base_converter):
         """
         
         io = NWBHDF5IO(self.folder_path+'/'+data_name, mode="r")
-        nwb_file = io.read()
+        self.nwb_file = io.read()
 
         return nwb_file
 
-    def write_nwb(self,data_name = None, nwb_file=None):
+    def write_nwb(self, data_name = None, nwb_file=None):
         """
             Write NWB files
 
@@ -324,7 +324,12 @@ class nwb_convert(base_converter):
 
         #%% Save NWB file
 
+    #%% functions for converting between video and nwb
+    def video2nwb(self):
+        pass
 
+    def nwb2video(self):
+        pass
 #%%
 
 

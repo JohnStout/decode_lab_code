@@ -30,22 +30,29 @@ from decode_lab_code.utils.neuralynxio import NeuralynxIO
 # from utils
 from decode_lab_code.utils import nlxhelper
 
-# our labs code (folder "core", file "base", class "base")
-from decode_lab_code.core.base import base_converter # this is a core base function to organize data
+# multiple inheritance - ephys gets its __init__ from base and gives it to read_nlx
+from decode_lab_code.core.ephys import ephys_tools # this is a core base function to organize data
+from decode_lab_code.core.base import base
 
 print("Cite NWB")
 print("Cite CatalystNeuro: NeuroConv toolbox if converting Neuralynx data")
 
 # a specific class for unpacking neuralynx data
-class read_nlx(base_converter):
+class read_nlx(ephys_tools):
 
     def read_all(self):
+
         """
         TODO: read all data at once
         Argument that allows the user to read all information from a file using the methods
         ascribed below
         """
-        pass
+
+        # just run everything below
+        self.read_ephys()
+        self.read_events()
+        self.read_header()
+        self.read_vt()
 
     def read_ephys(self, opts = None):
 
@@ -136,14 +143,14 @@ class read_nlx(base_converter):
                         print(blk_logger)
                         temp_csc = []; temp_times = []
                         for segi in range(len(blk.segments)):
-                            temp_csc.append(blk.segments[segi].analogsignals[0].magnitude)
-                            temp_times.append(blk.segments[segi].analogsignals[0].times)
-                        self.csc_data[datai] = np.vstack(temp_csc)
+                            temp_csc.append(blk.segments[segi].analogsignals[0].magnitude.flatten())
+                            temp_times.append(blk.segments[segi].analogsignals[0].times.flatten())
+                        self.csc_data[datai] = np.hstack(temp_csc)
                         self.csc_times = np.hstack(temp_times) # only need to save one. TODO: make more efficient
                     else:                   
-                        self.csc_data[datai] = blk.segments[0].analogsignals[0].magnitude
-                        self.csc_times = blk.segments[0].analogsignals[0].times
-                        
+                        self.csc_data[datai] = blk.segments[0].analogsignals[0].magnitude.flatten()
+                        self.csc_times = blk.segments[0].analogsignals[0].times.flatten()
+
                     # add sampling rate if available
                     if 'csc_fs' not in locals():
                         temp_fs = str(blk.segments[0].analogsignals[0].sampling_rate)
@@ -215,7 +222,6 @@ class read_nlx(base_converter):
         self.history.append("vt_y: y-position data obtained from .nvt files")
         self.history.append("vt_t: timestamp data obtained from .nvt files")
 
-
     def read_events(self):
 
         """
@@ -225,6 +231,142 @@ class read_nlx(base_converter):
 
         pass
 
-# a class for reading/writing videos
-class read_video(base_converter):
-    pass
+    def read_header(self):
+
+        # attempt to read files until you get a header
+        next = 0; looper = 0
+        while next == 0:
+            ncs_file = [i for i in self.dir_contents if '.ncs' in i.lower()][looper]
+            reader = NeuralynxRawIO(filename = os.path.join(self.folder_path,self.dir_contents[looper]))
+            reader.parse_header()
+            file_header = reader.file_headers
+            if bool(file_header) is False:
+                looper = looper+1
+            else:
+                next = 1
+            if looper == len(self.dir_contents)-1:
+                raise ValueError('Could not extract information from header')
+
+        # time information for NWB
+        header_list = list(list(file_header.values())[0])
+        #datetime_str = header_list['recording_opened']
+        self.header = header_list
+        self.history.append("header: example header from the filepath of a .ncs file")
+
+    def write_nwb(self):
+
+        # make sure you have the header
+        if self.header not in locals():
+            self.read_header()
+        datetime_str = self.header['recording_opened']
+
+        # create NWB file
+        nwbfile = NWBFile(
+            session_description=input("Enter a brief discription of the experiment: "),
+            identifier=str(uuid4()),
+            session_start_time = datetime_str,
+            experimenter = input("Enter the name(s) of the experimenter(s): "),
+            lab="Hernan Lab",
+            institution="Nemours Children's Hospital",
+            session_id=self.session_id
+        )
+
+        # enter subject specific information
+        subject = Subject(
+                subject_id=input("Enter subject ID: "),
+                age=input("Enter age of subject (PD): "),
+                description=input("Enter notes on this mouse as needed: "),
+                species=input("Enter species type (e.g. mus musculus (C57BL, etc...), Rattus rattus, homo sapiens): "),
+                sex=input("Enter sex of subject: "),
+            )
+
+        nwbfile.subject = subject
+
+        # add recording device information
+        device = nwbfile.create_device(
+            name="Cheetah", 
+            description=input("Type of array? (e.g. tetrode/probe)"), 
+            manufacturer="Neuralynx"
+            )
+        
+        #%% Add electrode column and prepare for adding actual data
+
+        # The first step to adding ephys data is to create categories for organization
+        nwbfile.add_electrode_column(name='label', description="label of electrode")
+
+        # add csc channels. Sometimes the lab uses CSC1-4 as TT1, sometimes we call it TTa-d.
+        group_csc = 'into tetrode' # TODO: Make this as an input
+        brain_area = 'PFC' # TODO: add brain_area as an input, but also make code flexible for multipl structures
+        
+        if 'tetrode' in group_csc:
+            group_csc_to_tt = int(len(self.csc_data)/4) # grouped tts
+            idx = [1,2,3,4] # index for tetrode assignment
+            electrode_counter = 0 # used later
+            for ei in range(group_csc_to_tt): # for loop over electrodes (ei)
+                if ei > 0:
+                    idx = [idxi+4 for idxi in idx] # index that changes according to tetrode assignment
+                print(idx) # parsing error
+
+                # create an electrode group for a given tetrode
+                electrode_group = nwbfile.create_electrode_group(
+                    name='Tetrode{}'.format(ei+1),
+                    description='Raw tetrode data',
+                    device=device,
+                    location=brain_area)     
+
+                # add each wire to the electrode group
+                csc_names_use = []
+                csc_names_use = [csc_names[idx[i]-1] for i in range(len(idx))]
+                print(csc_names_use) # changes with loop
+
+                for csci in csc_names_use:
+                    nwbfile.add_electrode(
+                        group = electrode_group,
+                        label = csci.split('.')[0],
+                        location=brain_area
+                    )
+                    electrode_counter += 1
+        nwbfile.electrodes.to_dataframe()
+
+        #%% NOW we work on adding our data. For LFPs, we store in ElectricalSeries object
+
+        # create dynamic table
+        all_table_region = nwbfile.create_electrode_table_region(
+            region=list(range(electrode_counter)),  # reference row indices 0 to N-1
+            description="all electrodes",
+        )
+
+        # now lets get our raw data into a new format
+        csc_all = np.zeros(shape=(len(csc_data[csc_names[0]]),electrode_counter))
+        for csci in range(len(csc_data)):
+            csc_all[:,csci] = np.reshape(csc_data[csc_names[csci]],len(csc_data[csc_names[csci]]))
+
+        raw_electrical_series = ElectricalSeries(
+            name="ElectricalSeries",
+            data=csc_all,
+            timestamps = csc_times, # need timestamps
+            electrodes=all_table_region,
+            #starting_time=0.0,  # timestamp of the first sample in seconds relative to the session start time
+            #rate=32000.0,  # in Hz
+        )
+        nwbfile.add_acquisition(raw_electrical_series)
+
+        #%% Add spiketimes
+        nwbfile.add_unit_column(name="quality", description="sorting quality")
+
+        # get unit IDs for grouping
+        unit_ids = tt_clust_data.keys()
+
+        unit_num = 0
+        for i in unit_ids:
+            for clusti in tt_clust_data[i]:
+                print(clusti)
+                #clust_id = i.split('.ntt')[0]+'_'+clusti
+                nwbfile.add_unit(spike_times = tt_clust_data[i][clusti],
+                                quality = "good",
+                                id = unit_num)
+                unit_num += 1
+        nwbfile.units.to_dataframe()
+
+        #%% Save NWB file
+        
