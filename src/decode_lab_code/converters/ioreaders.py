@@ -1,4 +1,10 @@
-# readers
+# ioreaders
+#
+# input-output readers
+#
+# specific purpose is to convert between raw data and dictionaries
+#
+# written by John Stout
 
 # get some packages
 from datetime import datetime
@@ -17,9 +23,7 @@ from pynwb.file import Subject
 # numpy
 import numpy as np
 
-# neo: TODO: modify neo function rawio/neuralyxrawio/nlxheader
-#from neo.io.neuralynxio import NeuralynxIO
-#from neo.io.neuralynxio import NeuralynxRawIO
+# loading neo package
 from decode_lab_code.utils.neuralynxrawio import NeuralynxRawIO
 from decode_lab_code.utils.neuralynxio import NeuralynxIO
 
@@ -220,3 +224,7 @@ class read_nlx(base_converter):
         """
 
         pass
+
+# a class for reading/writing videos
+class read_video(base_converter):
+    pass
