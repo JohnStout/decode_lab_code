@@ -15,8 +15,6 @@ from uuid import uuid4
 import re
 import os
 
-import pandas as pd
-
 # pynwb
 from pynwb import NWBHDF5IO, NWBFile
 from pynwb.ecephys import LFP, ElectricalSeries
@@ -197,36 +195,11 @@ class read_nlx(ephys_tools):
             self.history.append("csc_data_names: names of data in csc_data as organized by .ncs files")
             self.history.append("csc_data_fs: sampling rate for CSC data, defined by .ncs extension")
 
-            # add a grouping table for people to dynamically edit
-            self.csc_grouping_table = pd.DataFrame(self.csc_data_names)
-            self.csc_grouping_table.columns=['Name']
-            self.csc_grouping_table['TetrodeGroup'] = [[]] * self.csc_grouping_table.shape[0]
-            self.csc_grouping_table['BrainRegion'] = [[]] * self.csc_grouping_table.shape[0]
-            self.csc_grouping_table['Inclusion'] = [True] * self.csc_grouping_table.shape[0]
-
-            self.history.append("csc_grouping_table: pandas DataFrame to organize csc. This is good if you want to cluster data as the NWB file will detect your organization. try adding structure columns and tetrode grouping columns!")
-            self.history.append("csc_grouping_table.TetrodeGroup: group for tetrode assignment (CSC1-4 might belong to Tetrode 1)")
-            self.history.append("csc_grouping_table.BrainRegion: Enter Structure")
-            self.history.append("csc_grouping_table.Inclusion: default is True, set to False if you want to exclude grouping in NWB")
-
-
         if tt_added is True:
             self.tt_data_names = tt_names
             self.history.append("tt_data: Tetrode data as grouped by ext .ntt")
             self.history.append("tt_data_names: names of data in tt_data as organized by .ntt files")
             self.history.append("tt_data_fs: hard coded to 32kHz after not detected neo extraction of sampling rate")
-            
-            # add a grouping table for people to dynamically edit
-            self.tt_grouping_table = pd.DataFrame(self.tt_data_names)
-            self.tt_grouping_table.columns=['Name']
-            self.tt_grouping_table['BrainRegion'] = [[]] * self.tt_grouping_table.shape[0]
-            self.tt_grouping_table['Inclusion'] = [True] * self.tt_grouping_table.shape[0]
-
-            self.history.append("tt_grouping_table: pandas DataFrame to organize csc. This is good if you want to cluster data as the NWB file will detect your organization. try adding structure columns and tetrode grouping columns!")
-            self.history.append("tt_grouping_table.TetrodeGroup: group for tetrode assignment (CSC1-4 might belong to Tetrode 1)")
-            self.history.append("tt_grouping_table.BrainRegion: Enter Structure")
-            self.history.append("tt_grouping_table.Inclusion: default is True, set to False if you want to exclude grouping in NWB")
-
 
     def read_vt(self):
 
@@ -280,10 +253,14 @@ class read_nlx(ephys_tools):
         self.header = header_dict
         self.history.append("header: example header from the filepath of a .ncs file")
 
-    def write_nwb(self, ncs_to_tetrode = False):
+    def write_nwb(self, lfp_names = None, clustered_tt_names = None):
 
         """
-        All .ncs files will be taken in
+        Args:
+            lfp_names: default is none and therefore detected based on .ncs file types
+            clustered_tt_names: default is none and therefore detected based on .ntt file endings
+
+            RECOMMENDED to actually define these variables
 
         """
 
@@ -324,56 +301,43 @@ class read_nlx(ephys_tools):
 
         # The first step to adding ephys data is to create categories for organization
         nwbfile.add_electrode_column(name='label', description="label of electrode")
-       
-        # TODO: remove any rows of the pandas array if the inclusion is set to False
 
-        # loop over pandas array, first organize by array, then index tetrode and electrode
-        brain_regions = self.csc_grouping_table['BrainRegion'].unique().tolist()
-        electrode_group = self.csc_grouping_table['TetrodeGroup'].unique().tolist() # grouped into tetrde
-        csc_table_names = self.csc_grouping_table['Name'].tolist()
-        self.csc_grouping_table.set_index('Name', inplace=True) # set Name as the index
-        #self.csc_grouping_table.reset_index(inplace=True)
+        # add csc channels. Sometimes the lab uses CSC1-4 as TT1, sometimes we call it TTa-d.
+        group_csc = 'into tetrode' # TODO: Make this as an input
+        brain_area = 'PFC' # TODO: add brain_area as an input, but also make code flexible for multipl structures
         
-        # now create electrode groups according to brain area and electrode grouping factors
-        for bi in brain_regions: # loop over brain regions
-
-            for ei in electrode_group: # loop over tetrode or probe
+        
+        if 'tetrode' in group_csc:
+            group_csc_to_tt = int(len(self.csc_data)/4) # grouped tts
+            idx = [1,2,3,4] # index for tetrode assignment
+            electrode_counter = 0 # used later
+            for ei in range(group_csc_to_tt): # for loop over electrodes (ei)
+                if ei > 0:
+                    idx = [idxi+4 for idxi in idx] # index that changes according to tetrode assignment
+                print(idx) # parsing error
 
                 # create an electrode group for a given tetrode
                 electrode_group = nwbfile.create_electrode_group(
-                    name='Tetrode{}'.format(ei),
+                    name='Tetrode{}'.format(ei+1),
                     description='Raw tetrode data',
                     device=device,
-                    location=bi)         
+                    location=brain_area)     
 
-        # loop over the pandas array for csc data, then assign the data accordingly
-        electrode_counter = 0
-        for csci in csc_table_names: # loop over electrodes within tetrode
+                # add each wire to the electrode group
+                csc_names_use = []
+                csc_names_use = [csc_names[idx[i]-1] for i in range(len(idx))]
+                print(csc_names_use) # changes with loop
 
-            # get index of csc belonging to brain region bi and electrode ei
-            pd_series = self.csc_grouping_table.loc[csci]
-            #electrode_group = nwbfile.electrode_groups['Tetrode'+pd_series.TetrodeGroup]
-            nwbfile.add_electrode(
-                group = nwbfile.electrode_groups['Tetrode'+str(pd_series.TetrodeGroup)], 
-                label = csci.split('.')[0],
-                location=pd_series.BrainRegion
-            )      
-            electrode_counter += 1
-
+                for csci in csc_names_use:
+                    nwbfile.add_electrode(
+                        group = electrode_group,
+                        label = csci.split('.')[0],
+                        location=brain_area
+                    )
+                    electrode_counter += 1
         nwbfile.electrodes.to_dataframe()
 
         #%% NOW we work on adding our data. For LFPs, we store in ElectricalSeries object
-
-
-        TypeError("NEED TO UPDATE NWB FILE - IT WORKS WITH THE DATAFRAMES TO ASSIGN NAMINGS")
-
-
-
-
-        # TODO: LEFT OFF HERE@@@@@@@
-
-
-        # TODO: Need to make this so the inclusion/exclusion criterion works for TT exclusion
 
         # create dynamic table
         all_table_region = nwbfile.create_electrode_table_region(

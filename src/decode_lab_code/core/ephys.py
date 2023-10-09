@@ -177,3 +177,8 @@ class ephys_tools(base):
                 axes.xaxis.set_tick_params(labelsize=8)                              
             #var(axes[i])
         fig.show()
+
+    def artifact_detect(self):
+        # TODO: add some artifact detection code to identify timestamps for potential exlusion
+        
+        pass
