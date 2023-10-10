@@ -21,6 +21,7 @@ import pandas as pd
 from pynwb import NWBHDF5IO, NWBFile
 from pynwb.ecephys import LFP, ElectricalSeries
 from pynwb.file import Subject
+from pynwb import validate
 
 # numpy
 import numpy as np
@@ -219,6 +220,7 @@ class read_nlx(ephys_tools):
             # add a grouping table for people to dynamically edit
             self.tt_grouping_table = pd.DataFrame(self.tt_data_names)
             self.tt_grouping_table.columns=['Name']
+            self.tt_grouping_table['TetrodeGroup'] = [[]] * self.tt_grouping_table.shape[0]
             self.tt_grouping_table['BrainRegion'] = [[]] * self.tt_grouping_table.shape[0]
             self.tt_grouping_table['Inclusion'] = [True] * self.tt_grouping_table.shape[0]
 
@@ -280,7 +282,7 @@ class read_nlx(ephys_tools):
         self.header = header_dict
         self.history.append("header: example header from the filepath of a .ncs file")
 
-    def write_nwb(self, ncs_to_tetrode = False):
+    def write_nwb(self):
 
         """
         All .ncs files will be taken in
@@ -319,13 +321,22 @@ class read_nlx(ephys_tools):
             description=input("Type of array? (e.g. tetrode/probe)"), 
             manufacturer="Neuralynx"
             )
-        
+
+        #%% before moving forward, remove any rows set to be removed in the pandas array
+               
+        # remove any rows of the pandas array if the inclusion is set to False
+        rem_data_csc = self.csc_grouping_table['Inclusion'][self.csc_grouping_table['Inclusion']==False].index.tolist()
+        rem_data_tt = self.tt_grouping_table['Inclusion'][self.tt_grouping_table['Inclusion']==False].index.tolist()
+
+        print("Removing:\n",self.tt_grouping_table.iloc[rem_data_tt].Name,self.csc_grouping_table.iloc[rem_data_csc].Name)
+
+        self.csc_grouping_table=self.csc_grouping_table.drop(index=rem_data_csc)
+        self.tt_grouping_table=self.tt_grouping_table.drop(index=rem_data_tt)
+
         #%% Add electrode column and prepare for adding actual data
 
         # The first step to adding ephys data is to create categories for organization
         nwbfile.add_electrode_column(name='label', description="label of electrode")
-       
-        # TODO: remove any rows of the pandas array if the inclusion is set to False
 
         # loop over pandas array, first organize by array, then index tetrode and electrode
         brain_regions = self.csc_grouping_table['BrainRegion'].unique().tolist()
@@ -364,17 +375,6 @@ class read_nlx(ephys_tools):
 
         #%% NOW we work on adding our data. For LFPs, we store in ElectricalSeries object
 
-
-        TypeError("NEED TO UPDATE NWB FILE - IT WORKS WITH THE DATAFRAMES TO ASSIGN NAMINGS")
-
-
-
-
-        # TODO: LEFT OFF HERE@@@@@@@
-
-
-        # TODO: Need to make this so the inclusion/exclusion criterion works for TT exclusion
-
         # create dynamic table
         all_table_region = nwbfile.create_electrode_table_region(
             region=list(range(electrode_counter)),  # reference row indices 0 to N-1
@@ -382,14 +382,18 @@ class read_nlx(ephys_tools):
         )
 
         # now lets get our raw data into a new format
-        csc_all = np.zeros(shape=(len(csc_data[csc_names[0]]),electrode_counter))
-        for csci in range(len(csc_data)):
-            csc_all[:,csci] = np.reshape(csc_data[csc_names[csci]],len(csc_data[csc_names[csci]]))
+        print("This make take a few moments if working with a lot of CSC data...")
+        csc_all = np.zeros(shape=(len(self.csc_data[self.csc_data_names[0]]),electrode_counter))
+        self.csc_grouping_table.reset_index(inplace=True)
+        counter = 0
+        for csci in self.csc_grouping_table.Name:
+            csc_all[:,counter]=self.csc_data[csci]
+            counter += 1
 
         raw_electrical_series = ElectricalSeries(
             name="ElectricalSeries",
             data=csc_all,
-            timestamps = csc_times, # need timestamps
+            timestamps = self.csc_times, # need timestamps
             electrodes=all_table_region,
             #starting_time=0.0,  # timestamp of the first sample in seconds relative to the session start time
             #rate=32000.0,  # in Hz
@@ -400,18 +404,60 @@ class read_nlx(ephys_tools):
         nwbfile.add_unit_column(name="quality", description="sorting quality")
 
         # get unit IDs for grouping
-        unit_ids = tt_clust_data.keys()
+        unit_ids = self.tt_grouping_table.Name.tolist()
+        self.tt_grouping_table.set_index('Name', inplace=True) # set Name as the index
+        #self.tt_grouping_table.reset_index(inplace=True)
 
         unit_num = 0
         for i in unit_ids:
-            for clusti in tt_clust_data[i]:
-                print(clusti)
+            #print(self.tt_data[i])
+            tetrode_num = self.tt_grouping_table.loc[i].TetrodeGroup
+            brain_reg = self.tt_grouping_table.loc[i].BrainRegion
+            for clusti in self.tt_data[i]:
+                #print(i+' '+clusti)
                 #clust_id = i.split('.ntt')[0]+'_'+clusti
-                nwbfile.add_unit(spike_times = tt_clust_data[i][clusti],
-                                quality = "good",
-                                id = unit_num)
+                nwbfile.add_unit(spike_times = self.tt_data[i][clusti],
+                                 electrode_group = nwbfile.electrode_groups['Tetrode'+str(tetrode_num)], 
+                                 quality = "good",
+                                 id = unit_num)
                 unit_num += 1
         nwbfile.units.to_dataframe()
 
         #%% Save NWB file
+        save_nwb(folder_path=self.folder_path,nwb_file=nwbfile)
+        val_out = validate(paths=[os.path.join(self.folder_path,'nwbfile.nwb')], verbose=True)
         
+        print("NWB validation may be incorrect. Still need an invalid NWB file to check against....10/10/2023")
+        if val_out[1]==0:
+            print("No errors detected in NWB file")
+        else:
+            print("Error detected in NWB file")
+
+# some general helper functions for nwb stuff
+def load_nwb(folder_path: str, data_name: str = 'nwbfile.nwb'):
+    """
+        Read NWB files
+
+        Args:
+            folder_path: directory of data
+            data_name: (OPTIONAL). Recommend to standardize this.
+    """
+    io = NWBHDF5IO(folder_path+'/'+data_name, mode="r")
+    nwb_file = io.read()
+
+    return nwb_file
+
+def save_nwb(folder_path: str, data_name: str = 'nwbfile.nwb', nwb_file=None):
+    """
+        Write NWB files
+
+        Args:
+            folder_name: location of data
+            data_name (OPTIONAL): name of nwb file
+            nwb_file: nwb file type
+    """
+
+    with NWBHDF5IO(folder_path+'/'+data_name, "w") as io:
+        io.write(nwb_file)
+
+    print("Save .nwb file to: ",folder_path+'/'+data_name)

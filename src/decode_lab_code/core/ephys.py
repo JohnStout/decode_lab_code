@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from decode_lab_code.core.base import base
 import pynapple as pyn
+from scipy.signal import butter, sosfilt, lfilter
 
 import re
 from typing import Dict, Union, List, Tuple
