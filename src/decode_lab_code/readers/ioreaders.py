@@ -254,7 +254,7 @@ class read_nlx(ephys_tools):
     def read_events(self):
 
         """
-        TODO: Read events information
+        TODO: Read events information and this information will be packaged into nwb.epochs
         
         """
 
@@ -288,6 +288,9 @@ class read_nlx(ephys_tools):
         All .ncs files will be taken in
 
         """
+        print("This file saves raw data. TODO: Add preprocessed module")
+
+        # TODO: Add preprocessing module to the NWB file for times when the user does things like filters/rereferences
 
         # make sure you have the header
         self.read_header()
@@ -422,6 +425,12 @@ class read_nlx(ephys_tools):
                                  id = unit_num)
                 unit_num += 1
         nwbfile.units.to_dataframe()
+
+        #%% 
+
+        #TODO: Add NWB epochs for Events.nev information or whatever else is input
+
+        #TODO: This will get more complicated for the fear dataset that had some pre-defined tone condition
 
         #%% Save NWB file
         save_nwb(folder_path=self.folder_path,nwb_file=nwbfile)
