@@ -8,7 +8,6 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import pynwb
 
 # this class is for putting directories into the pipeline
 class base():

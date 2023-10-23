@@ -45,7 +45,6 @@ from decode_lab_code.core.base import base
 print("Cite pynwb, neo, and CatalystNeuro team")
 print("Please note, if there are multiple start/stops, more data is collected after a stopping recording. You must trim the CSC.")
 
-print("TODO: MUST CHECK ALL SLICING FOR [a:b], MUST BE [a::b]")
 # a specific class for unpacking neuralynx data
 class read_nlx(ephys_tools):
 
@@ -125,7 +124,7 @@ class read_nlx(ephys_tools):
         
         # Here we create separate dictionaries containing datasets with their corresponding labels
         dict_keys = neural_dict.keys()
-        self.csc_data = dict(); self.tt_data = dict(); self.csc_data_fs = dict();
+        self.csc_data = dict(); self.tt_data = dict()
         csc_added = False; tt_added = False
         for groupi in dict_keys: # grouping variable to get TT data
             print("Working with",groupi)
@@ -171,25 +170,50 @@ class read_nlx(ephys_tools):
 
                     # now restrict CSC data and times to be within event_times
                     for i in range(len(start_times)):
-                        # convert to numpy
                         temp_times[i]=np.array(temp_times[i])
-                        temp_csc[i]=np.array(temp_csc[i])
-                        # get indices of start/stop times based on events file
-                        idx_start = np.where(temp_times[i]==start_times[i])[0][0]
-                        idx_end = np.where(temp_times[i]==end_times[i])[0][0]
-                        # get data in between - not sure why I need to add 1 to the end
-                        temp_csc[i] = temp_csc[i][idx_start:idx_end+1]
-                        temp_times[i] = temp_times[i][idx_start:idx_end+1]
-
-                    # horizontally stack data
+                        idx_start = np.where(temp_times[i]==start_times[i])
+                        idx_end = np.where(temp_times[i]==end_times[i])
+                        # get data in between
+                        temp_csc[i] = temp_csc[i][idx_start[0][0]:idx_end[0][0]]
+                        temp_times[i] = temp_times[i][idx_start[0][0]:idx_end[0][0]]
                     self.csc_data[datai] = np.hstack(temp_csc)
                     self.csc_times = np.hstack(temp_times) # only need to save one. TODO: make more efficient                        
+
+
+
+                    multi_starts = [i for i in self.event_strings if 'Start' in i]
+                    multi_stops = [i for i in self.event_strings if 'Stop' in i]
+
+
+                    if len(blk.segments) > 1:
+
+                        # search for multiple start stops
+                        multi_starts = [i for i in self.event_strings if 'Start' in i]
+                        multi_stops = [i for i in self.event_strings if 'Stop' in i]
+
+                        if len(multi_starts) > 1 or len(multi_stops) > 1:
+                            blk_logger = ("Multiple starts/stops detected in "+datai+". Data will be concatenated between blocks.")                            
+                            print(blk_logger)
+
+                        temp_csc = []; temp_times = []; csc_fs = []
+                        for segi in range(len(blk.segments)):
+                            temp_csc.append(blk.segments[segi].analogsignals[0].magnitude.flatten())
+                            temp_times.append(blk.segments[segi].analogsignals[0].times.flatten())
+                            #csc_fs.append(blk.segments[segi].analogsignals[0].rate)
+                        self.csc_data[datai] = np.hstack(temp_csc)
+                        self.csc_times = np.hstack(temp_times) # only need to save one. TODO: make more efficient
+                    else:                   
+                        self.csc_data[datai] = blk.segments[0].analogsignals[0].magnitude.flatten()
+                        self.csc_times = blk.segments[0].analogsignals[0].times.flatten()
 
                     # add sampling rate if available
 
                     #TODO: add fs for each csc channel and segment!!!
-                    temp_fs = str(blk.segments[0].analogsignals[0].sampling_rate)
-                    self.csc_data_fs[datai] = csc_fs
+                    print("Must add sampling rate for each csc channel and block")
+                    if 'csc_fs' not in locals():
+                        temp_fs = str(blk.segments[0].analogsignals[0].sampling_rate)
+                        csc_fs = int(temp_fs.split('.')[0])
+                        self.csc_data_fs = csc_fs
                     csc_added = True
 
                 # Notice that all values are duplicated. This is because tetrodes record the same spike times.
