@@ -13,7 +13,7 @@ dandi = "^0.55.1"
 numpy = "^1.25.2"
 scipy = "^1.11.1"
 pandas = "^1.5.3"
-pynapple = "^0.3.6"
+pynapple = "^0.4.0"
 ipykernel = "^6.25.2"
 matplotlib = "^3.8.0"
 
