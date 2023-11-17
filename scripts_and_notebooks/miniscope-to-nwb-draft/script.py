@@ -14,8 +14,21 @@ This package will create a very simple NWB file, after which you can load and ap
 
 John Stout
 
-"""
 
+TODO: MUST CREATE A CONFIG JSON FILE FOR MINISCOPE THAT FILLS IN ALL INFORMATION
+People can simply take this config, use it, then it is plug and play
+-> This script will be run from terminal and create the NWB file on the backend
+-> Would be lovely to implement this code into Aharoni code
+
+>>> Age
+>>> name
+>>> Virus type
+>>> Lab
+>>> Institution
+
+#TODO: MUST FIX TIMESTAMPS
+
+"""
 
 #%% 
 import os
@@ -62,7 +75,7 @@ from pynwb.ophys import (
 # could also run a search for anything json related and store that as a 'metaData' file
 #   and anything .csv related
 
-# dir will be the only input to this code
+# TODO: dir will be the only input to this code
 dir = '/Users/js0403/miniscope/data/134A/AAV2/3-Syn-GCaMP8f/2023_11_14/13_21_49'
 dir_contents = sorted(os.listdir(dir))
 
@@ -118,7 +131,14 @@ nwbfile = NWBFile(
     #viral_construct = input("Enter the virus used for imaging: ")
 )
 
-# TODO subject
+# subject information
+subject = Subject(
+    subject_id=folder_metaData['animalName'],
+    age="P90D",
+    description="mouse 5",
+    species="Mus musculus",
+    sex="M",
+)
 
 # imaging device
 device = nwbfile.create_device(
@@ -147,65 +167,89 @@ imaging_plane = nwbfile.create_imaging_plane(
 nwbpath = os.path.join(dir,"nwbfile.nwb")
 with NWBHDF5IO(nwbpath, mode="w") as io:
     io.write(nwbfile)
+del nwbfile # delete the file to remove objects
 
-#%% Writing data to NWB file
+# reload
+#with NWBHDF5IO(nwbpath, mode="r") as io:
+    #nwbfile = io.read()
 
-# We are going to load in data from miniscope, this isn't a big deal.
-# The miniscope only records 1000 samples at a time. 
-# The big deal is being able to write the file as a new one-p-timeseries lazily
+#%% Writing data to NWB file by loading it lazily
 
+# this approach maximizes memory space by only loading what is needed,
+# and only saving out what is needed. Then clearing memory of the large arrays.
 
+# It loads the nwbfile that has no data, it adds a calcium imaging movie to it,
+# saves the nwbfile, loads it again lazily (not loading the actual data), then adds
+# a new object with new data, and so forth.
 
-# STUCK HERE. HOW CAN WE ITERATIVELY ADD AN ONEPHOTONSERIES OBJECT TO DISK????
+# This circumvents the issue of having to load all data into memory, then save all data to disk at once.
 
+# movie times - this must be segmented according to the movie
+movie_times = miniscope_times['Time Stamp (ms)']
 
-# read video
-print("Reading video")
-movie_data = []
-cap = cv2.VideoCapture(os.path.join(miniscope_dir,miniscope_data[0])) 
-while(cap.isOpened()):
-    ret, frame = cap.read()
-    if ret is False:
-        break
-    else:
-        movie_data.append(frame[:,:,0]) # only the first array matters
-movie_mat = np.dstack(movie_data)
-plt.imshow(movie_mat[:,:,0])
-
-with NWBHDF5IO(nwbpath, "r") as io:
-    nwbfile = io.read()
-
-    # using internal data. this data will be stored inside the NWB file
-    one_p_series = OnePhotonSeries(
-        name="OnePhotonSeries_internal2",
-        data=np.ones((1000, 100, 100)),
-        imaging_plane=imaging_plane,
-        rate=1.0,
-        unit="normalized amplitude",
-    )    
-    nwbfile.add_acquisition(one_p_series)
-
-    with NWBHDF5IO(nwbpath, mode="w") as io:
-        io.write(nwbfile)
-io.close()
-
-    del nwbfile
-
-
-
-# there has got to be a way to save the .nwb file as a bunch of zeros, but then write each image individually
-miniscope_series = []; counter = 0
+# TODO: ADD an index to label each timestamp to a video
+# Can I add a pandas array as a timestamps videO?
+        
+# open the NWB file in r+ mode
+counter = 0; 
 for i in miniscope_data:
+
+    # define directory
     temp_dir = os.path.join(miniscope_dir,i)
     print(temp_dir)
 
-    # using internal data. this data will be stored inside the NWB file
-    one_p_series = OnePhotonSeries(
-        name="OnePhotonSeries_internal",
-        data=np.ones((1000, 100, 100)),
-        imaging_plane=imaging_plane,
-        rate=1.0,
-        unit="normalized amplitude",
-    )
+    # read movie file
+    movie_path = os.path.join(miniscope_dir,i)
+    print("Reading movie from: ", movie_path)
+    cap = cv2.VideoCapture(movie_path) 
+    movie_data = []
+    while(cap.isOpened()):
+        ret, frame = cap.read()
+        if ret is False:
+            break
+        else:
+            movie_data.append(frame[:,:,0]) # only the first array matters
+    movie_mat = np.dstack(movie_data)
+    movie_data = np.moveaxis(movie_mat, -1, 0)
 
-    nwbfile.add_acquisition(one_p_series)
+    # get times by index
+    idx = np.arange(movie_data.shape[0])
+    temp_times = movie_times[idx].to_numpy(dtype=int) # THESE ARE THE DATA TO SAVE!!!
+
+    # now get an updated version of the movie_times, with the previous data dropped
+    movie_times = movie_times.drop(idx).reset_index(drop=True)
+    
+    # search for nwbfile as a variab
+    # le and remove it
+    if 'nwbfile' in locals():
+        del nwbfile
+
+    with NWBHDF5IO(nwbpath, "r+") as io:
+        print("Reading nwbfile from: ",nwbpath)
+        nwbfile = io.read()
+
+        # create OnePhotonSeries Object
+        one_p_series = OnePhotonSeries(
+            name="recording"+str(counter),
+            data=movie_data,
+            #timestamps = temp_times,
+            imaging_plane=nwbfile.get_imaging_plane(),
+            rate=float(miniscope_metaData['frameRate']), # I'm not sure what this refers to
+            unit="raw video - rate in terms of frame-rate",
+        )
+        nwbfile.add_acquisition(one_p_series)
+
+        # write the modified NWB file
+        print("Rewriting nwbfile with recording",str(counter))
+        io.write(nwbfile)
+        io.close()
+        counter += 1
+
+    del movie_mat, movie_data, nwbfile, one_p_series
+
+# confirmed !!!
+# read to check NWB file
+with NWBHDF5IO(nwbpath, "r+") as io:
+    print("Reading nwbfile from: ",nwbpath)
+    nwbfile = io.read()
+    tester = nwbfile.acquisition['recording1'].data[:]
