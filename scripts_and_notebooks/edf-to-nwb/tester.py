@@ -54,12 +54,6 @@ data_table['Unit'] = unit
 # excel file gets saved out, edited, then reloaded
 data_table = nwb_utils.pandas_excel_interactive(dir = dir, df = data_table)
 
-# now we save out to an excel sheet
-#excel_dir = os.path.join(dir,"nwb_excel_sheet.xlsx")
-#data_table.to_excel(excel_dir)
-#input("Please edit the excel file, save the file (DONT CHANGE ITS NAME), then press enter to continue...")
-#data_table = pd.read_excel(excel_dir)
-
 # TODO: Add preprocessing module to the NWB file for times when the user does things like filters/rereferences
 datetime_str = header['startdate']
 

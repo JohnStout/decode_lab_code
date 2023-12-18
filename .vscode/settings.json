@@ -1,3 +1,4 @@
 {
-    "python.analysis.typeCheckingMode": "basic"
+    "python.analysis.typeCheckingMode": "basic",
+    "julia.environmentPath": "/Users/js0403/decode_lab_code"
 }
