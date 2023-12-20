@@ -4,12 +4,9 @@
 #
 # Written by John Stout
 
-from scipy.signal import welch
-from decode_lab_code.readers.ioreaders import load_nwb
+from scipy.signal import welch, coherence
 import matplotlib.pyplot as plt
 import numpy as np
-from decode_lab_code.core.base import base
-from decode_lab_code.readers.ioreaders import read_nlx
 import pandas as pd
 
 # run below in interactive window for troubleshooting
@@ -25,7 +22,7 @@ print("Cite Pynapple and PYNWB")
 def filt():
     pass
 
-def power(data: list, fs: float, frequency_range: list = [1,100]):
+def power(data, fs: float, frequency_range: list = [1,100]):
 
     """
     Run welch's power analysis
@@ -33,16 +30,21 @@ def power(data: list, fs: float, frequency_range: list = [1,100]):
     Requires pynapple based loading
 
     Args:
-        >>> channel_name: name of the CSC channel you want to use
-        >>> start_time: start time for your analysis (accepts lists of time)
-        >>> end_time: list of times to index to. MUST MATCH START_TIME SIZE/SHAPE
+        >>> data: numpy array
+        >>> fs: sampling rate
+        >>> frequency_range: list for range of frequency
+
+    Returns: 
+        >>> PSpect: power spectrum in frequency range
+        >>> fSpec: frequency range in the defined band
+        >>> PSpecLog: log transformed power spectrum
     """
 
-    PSpec = [] PSpecLog = [] 
+    PSpec = []; PSpecLog = [] 
     for i in range(len(data)):
 
         # power spectrum
-        f,Ptemp = welch(data[i],fs,nperseg=fs)
+        f,Ptemp = welch(data,fs,nperseg=fs)
 
         # restrict data to 1-50hz for plot proofing
         #f[f>1]
@@ -53,11 +55,18 @@ def power(data: list, fs: float, frequency_range: list = [1,100]):
         # log10 transform
         PSpecLog = np.log10(PSpec)
 
-    return PSpec, PSpecLog
+    return PSpec, fSpec, PSpecLog
 
 # TODO
-def coherence():
-    pass
+def fieldfield_coherence(x, y, fs, nperseg=100, frequency_range: list = [1,100]):
+
+    f, cxy = coherence(x,y,fs,nperseg=100)
+    idx = np.logical_and(f>= frequency_range[0],f<=frequency_range[1])
+    plt.plot(f[idx],cxy[idx],linewidth=2,color='r')
+    plt.ylabel('Mean Squared Coherence')
+    plt.xlabel('Frequency (hz)')
+
+    return f, cxy
 
 def spikefield_coherence():
     pass
