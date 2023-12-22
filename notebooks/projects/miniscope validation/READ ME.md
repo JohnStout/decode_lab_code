@@ -5,6 +5,8 @@ This code provides some options to converting and working with your miniscope da
 First and foremost, we collect miniscope data as individual recording files of 1000 samples each. 
 Every 1000 samples, a new video is made from the miniscope recordings.
 
+I have been using Fiji to merge these videos for analysis with CaImAn
+
 ---
 
 If you want to convert your data to NWB
