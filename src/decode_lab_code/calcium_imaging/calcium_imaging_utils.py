@@ -124,6 +124,7 @@ def stacktiff(dir: str, dir_save = None, downsample_factor = None):
     images = []
     counter = 0
     for iname in pathnames:
+        # consider changing to memmap
         im = tiff.imread(iname)
         if downsample_factor is not None:
             im = im[0::downsample_factor,0::downsample_factor]
@@ -134,6 +135,10 @@ def stacktiff(dir: str, dir_save = None, downsample_factor = None):
     images = np.asarray(images) # convert to numpy array
     print("saving to ",dir_save)
     tiff.imwrite(dir_save+'/tiff_stack.tif',images) # save as tiff
+
+
+
+
 
 
 # -- visualization functions -- #
