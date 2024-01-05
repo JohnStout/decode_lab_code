@@ -44,20 +44,8 @@ def mp4_to_tif(movie_path: str):
     # require user interface (-1 bc 0 indexing in python)
     idx_movie = int(input("Enter which dimension [1/2/3] has your data:"))-1
 
-    # interact with user to downsample data
-    fig, ax = plt.subplots(nrows=1, ncols=4, figsize=(10,5))
-    ax[0].imshow(vid.get_data(0)[:,:,idx_movie])
-    ax[0].set_title("Full Size")   
-    ax[1].imshow(vid.get_data(0)[::2,::2,idx_movie])
-    ax[1].set_title("Downsampled x2")       
-    ax[2].imshow(vid.get_data(0)[::4,::4,idx_movie])
-    ax[2].set_title("Downsampled x4")      
-    ax[3].imshow(vid.get_data(0)[::6,::6,idx_movie])
-    ax[3].set_title("Downsampled x6")   
-    plt.show()   
-
-    # choose how to downsample the data
-    downsample_factor = int(input("Enter Downsample factor [None, 2, 4, 6, etc...]:"))
+    # get downsample factor interactively
+    downsample_factor = interactive_downsample(image = vid.get_data(0)[:,:,idx_movie])
 
     # run a while loop to extract data
     images = []
@@ -220,8 +208,38 @@ def lazyTiff(movie_path: str):
 
     return movie
 
+def interactive_downsample(image):
+    '''
+    Args:
+        >>> image: example image from a movie
+
+    Returns:
+        >>> downsample_factor: chosen downsample factor as an int
+    '''
+
+    # plot results of various downsamplings
+    fig, ax = plt.subplots(nrows=1, ncols=4, figsize=(10,5))
+    ax[0].imshow(image)
+    ax[0].set_title("Full Size")   
+    ax[1].imshow(image[::2,::2])
+    ax[1].set_title("Downsampled x2")       
+    ax[2].imshow(image[::4,::4])
+    ax[2].set_title("Downsampled x4")      
+    ax[3].imshow(image[::6,::6])
+    ax[3].set_title("Downsampled x6")   
+    plt.show()   
+
+    # now interact with user
+    downsample_factor = input("Enter Downsample factor [None, 2, 4, 6, etc...]:")
+    if 'None' in downsample_factor:
+        downsample_factor = None
+    else:
+        downsample_factor = int(downsample_factor)
+             
+    return downsample_factor
+
 # stacktiff allows a user to stack a ton of tiff files into one singular file
-def stacktiff(dir: str, dir_save = None, downsample_factor = None):
+def stacktiff(tiff_series_path: str, downsample_factor = None):
     """
     This function takes a folder with a bunch of .tif images and stacks them
 
@@ -235,38 +253,49 @@ def stacktiff(dir: str, dir_save = None, downsample_factor = None):
             downsample_factor = 2 spatially reduces your dataset by a factor of 2
     """
 
-    if dir_save is None:
-        dir_save = dir
-
-    # change me
-    # dir = directory of data (change me)
-    #dir = '/Volumes/decode/Akanksha/Slice_calcium_imaging_videos_images/Pilots/Static_recordings/08-31-2023/Tiff_series_Process_7'
-    extension = '.tif' # no need to change
-    mid_ext = '/*' # don't change
-
-    # do stuff
-    pathnames = glob.glob(dir+mid_ext+extension)
+    # extract all tif data in series
+    pathnames = glob.glob(tiff_series_path+'/*.tif')
     pathnames.sort()
+    num_files = len(pathnames)
 
     # read in one image to get shape
     im = imread(pathnames[0])
-    image_shape = im.shape
 
-    # TODO: Change this to memmap approach like in the mp4 code
-    images = []
+    # get downsample factor interactively
+    downsample_factor = interactive_downsample(im)
+    if downsample_factor is not None:
+        image_shape = im[::downsample_factor,::downsample_factor].shape
+    else:
+        image_shape = im.shape
+
+    # create new directory to save data
+    root_dir = os.path.split(os.path.split(pathnames[0])[0])[0] # select container folder
+    new_dir = os.path.join(root_dir,'stacked_series')
+    os.mkdir(new_dir) # make directory
+    print("Created new directory:", new_dir)
+
+    # get new name
+    fname = os.path.join(new_dir,'stacked_series.tif')
+
+    # create a memory mappable file
+    im = memmap(
+        fname,
+        shape=(num_files,image_shape[0],image_shape[1]),
+        dtype=np.uint16,
+        append=True
+    )
+
+    # now we will append to memory mapped file
+    print("Please wait while data is mapped to:",fname)
     counter = 0
-    for iname in pathnames:
-        # consider changing to memmap
-        im = imread(iname)
-        if downsample_factor is not None:
-            im = im[0::downsample_factor,0::downsample_factor]
-        images.append(im)
-        counter = counter+1
-        print("Completed with",(counter/len(pathnames)*100),'%')
-        del im
-    images = np.asarray(images) # convert to numpy array
-    print("saving to ",dir_save)
-    imwrite(dir_save+'/tiff_stack.tif',images) # save as tiff
+    for i in pathnames:
+        if downsample_factor is None:
+            im[counter] = imread(i)
+        else:
+            im[counter] = imread(i)[::downsample_factor,::downsample_factor]
+        im.flush()
+        print("Finished with image",counter+1,"/",len(pathnames))  
+        counter += 1
 
 # downsample_movie provides a class to downsample your dataset
 class modify_movie():
