@@ -1,3 +1,10 @@
+'''
+    This is collection of code used to preprocess video recordings of calcium imaging data
+
+    - John Stout
+
+'''
+
 # unpack nwb file movies into .tif files
 from pynwb import NWBHDF5IO
 from tifffile import imsave, memmap, imread, imwrite, TiffFile
@@ -91,7 +98,95 @@ def mp4_to_tif(movie_path: str):
             counter += 1
         except:
             next = 1
-    
+
+# NOT WORKING  
+def miniscope_to_tif(movie_path: str):
+
+    '''
+    Args: 
+        >>> movie_path: path to data containing .avi files
+            __/FOLDER__
+                --> 0.avi
+                --> 1.avi
+
+    This code will save out a stacked .tif file and provide options for downsampling
+
+    John Stout  
+    '''
+
+    # get all .avi files on path
+    pathnames = glob.glob(movie_path+'/*.avi')
+    pathnames.sort()
+    num_files = len(pathnames)
+
+    # use ffmpeg backend for temporary data
+    vid = imageio.get_reader(pathnames[0],  'ffmpeg')
+    temp_data = vid.get_data(0)
+
+    # load ffmpeg backend
+    total_frame_count = []
+    for i in pathnames:
+
+        # use ffmpeg backend
+        vid = imageio.get_reader(i,  'ffmpeg')
+        pixel_shape = vid.get_data(0)[:,:,0].shape 
+
+        # get movie length
+        counter = 0; next = 0
+        while next == 0:
+            try:
+                vid.get_data(counter)
+                counter += 1
+            except:
+                next = 1
+        
+        # create a memory mappable file
+        fname = i.split('.avi')[0]+'.tif'
+        im = memmap(
+            fname,
+            shape=(counter,pixel_shape[0],pixel_shape[1]),
+            dtype=np.uint16,
+            append=True
+        )
+        total_frame_count.append(counter)
+
+        # now we will append to memory mapped file
+        print("Please wait while data is mapped to:",fname)
+        next = 0; counter = 0
+        while next == 0:
+            try:
+                im[counter]=vid.get_data(counter)[:,:,0]
+                im.flush()  
+                print("Finished with image",counter," from movie", i.split('.avi')[-1])                     
+                counter += 1
+            except:
+                next = 1
+
+    # new pathnames
+    pathnames = glob.glob(movie_path+'/*.tif')
+    pathnames.sort()
+    num_files = len(pathnames)                
+
+    # create a memory mappable file
+    fname = os.path.join(os.path.split(pathnames[0])[0],'full_movie.tif')
+    im = memmap(
+        fname,
+        shape=(sum(total_frame_count),pixel_shape[0],pixel_shape[1]),
+        dtype=np.uint16,
+        append=True
+    )
+
+    # TODO: THIS IS BUSTED!!!
+
+    # now we will append to memory mapped file
+    print("Please wait while data is mapped to:",fname)
+    counter = 0
+    for i in range(len(total_frame_count)):
+        im[counter:total_frame_count[i]*(i+1),:,:] = imread(pathnames[i])
+        counter += total_frame_count[i]
+        im.flush()
+        print("Finished with image",counter+1,"/",len(pathnames))  
+
 # nwb_to_tif converts your nwb file movies to .tif files
 def nwb_to_tif(nwbpath: str):
     '''
@@ -261,6 +356,10 @@ def stacktiff(tiff_series_path: str, downsample_factor = None):
     # read in one image to get shape
     im = imread(pathnames[0])
 
+    # if the size the image is 3D, then just take a sample
+    if len(im.shape) > 2:
+        im = im[0]
+
     # get downsample factor interactively
     downsample_factor = interactive_downsample(im)
     if downsample_factor is not None:
@@ -271,8 +370,11 @@ def stacktiff(tiff_series_path: str, downsample_factor = None):
     # create new directory to save data
     root_dir = os.path.split(os.path.split(pathnames[0])[0])[0] # select container folder
     new_dir = os.path.join(root_dir,'stacked_series')
-    os.mkdir(new_dir) # make directory
-    print("Created new directory:", new_dir)
+    try:
+        os.mkdir(new_dir) # make directory
+        print("Created new directory:", new_dir)
+    except:
+        print("Existing directory:", new_dir)
 
     # get new name
     fname = os.path.join(new_dir,'stacked_series.tif')
