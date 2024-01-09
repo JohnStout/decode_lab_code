@@ -11,12 +11,18 @@ from tifffile import imsave, memmap, imread, imwrite, TiffFile
 import glob
 import numpy as np
 import os
-import caiman as cm
 import psutil
 from pynwb import NWBHDF5IO
 from scipy.signal import detrend
 import matplotlib.pyplot as plt
 import imageio
+
+# only works if caiman is environment
+try:
+    import caiman as cm
+except:
+    print("CaImAn toolbox not loaded. Add to environment if running calcium imaging analysis")
+    pass
 
 #% helper functions
 def mp4_to_tif(movie_path: str):
@@ -98,6 +104,143 @@ def mp4_to_tif(movie_path: str):
             counter += 1
         except:
             next = 1
+
+    return fname
+
+# downsample tif file
+def downsample_tif(movie_path: str):
+    '''
+    downsample_to_tif:
+        This function is used to convert lionheart data to .tif files for analysis
+
+    Args:
+        >>> movie_path: string to the filetype of interest ending in '.mp4'
+        >>> idx_movie: int representing the index that contains your movie. 
+                These files are saved as multi-image stacks. One of them is important.
+                To figure this out:
+                    vid = imageio.get_reader(movie_path,  'ffmpeg')
+                    plt.imshow(vid)
+
+    '''
+
+    # load ffmpeg backend
+    vid = imageio.get_reader(movie_path,  'ffmpeg')
+    vid.get_meta_data()
+
+    # interface with user
+    fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(10,5))
+    ax[0].imshow(vid.get_data(0)[::2,::2,0])
+    ax[0].set_title("Dimension 1")
+    ax[1].imshow(vid.get_data(0)[::2,::2,1])
+    ax[1].set_title("Dimension 2")
+    ax[2].imshow(vid.get_data(0)[::2,::2,2])
+    ax[2].set_title("Dimension 3")
+    plt.show()
+
+    # require user interface (-1 bc 0 indexing in python)
+    idx_movie = int(input("Enter which dimension [1/2/3] has your data:"))-1
+
+    # get downsample factor interactively
+    downsample_factor = interactive_downsample(image = vid.get_data(0)[:,:,idx_movie])
+
+    # run a while loop to extract data
+    images = []
+    next = 0; counter = 0
+
+    # create new name for tif file
+    fname = movie_path.split('.tif')[0]+'_downsampled.tif'
+
+    # get pixel shape
+    if downsample_factor is None:
+        pixel_shape = vid.get_meta_data()['size']
+    else:
+        pixel_shape = vid.get_data(0)[::downsample_factor,::downsample_factor,idx_movie].shape
+
+    # get movie length
+    counter = 0; next = 0
+    while next == 0:
+        try:
+            vid.get_data(counter)
+            counter += 1
+        except:
+            next = 1
+    
+    # create a memory mappable file
+    im = memmap(
+        fname,
+        shape=(counter,pixel_shape[0],pixel_shape[1]),
+        dtype=np.uint16,
+        append=True
+    )
+
+    # now we will append to memory mapped file
+    print("Please wait while data is mapped to:",fname)
+    next = 0; counter = 0
+    while next == 0:
+        try:
+            if downsample_factor is None:
+                im[counter]=vid.get_data(counter)[:,:,idx_movie]
+            else:
+                im[counter]=vid.get_data(counter)[::downsample_factor,::downsample_factor,idx_movie]
+            im.flush()  
+            print("Finished with image",counter)                     
+            counter += 1
+        except:
+            next = 1
+
+# split 4D tif file
+def split_4D_tif(movie_path: str, structural_index = None, functional_index = None):
+
+    """
+    This function will take a 4D movie, split it into its components based on your index, 
+    then save the output based on the save name index.
+
+    This function was specifically designed when one records a structural channel with a functional channel. 
+    For example, you might record astrocytes with an RFP, but neurons or all cells with a GCaMP.
+
+    Args:
+        movie_path: tiff file path
+        structural_index: index for structural imaging
+        functional_index: index for functional imaging
+
+    output:
+        self.fname_struct: structural fname
+        self.fname_funct: functional fname  
+    
+    """
+
+    # load movie
+    movie = lazyTiff(movie_path)
+
+    if structural_index is None or functional_index is None:
+        idx = np.argmin(movie.shape)
+        fig, ax = plt.subplots(nrows=1, ncols=2, figsize = (5, 2.5))
+
+        if idx == 1:
+            ax[0].imshow(movie[0,0,:,:])
+            ax[1].imshow(movie[0,1,:,:])
+            functional_index = int(input("Which subplot is your functional image? [1 or 2]: "))-1
+            if functional_index == 0:
+                structural_index = 1
+            elif functional_index == 1:
+                structural_index = 0
+
+    # get file_root
+    file_root = movie_path.split('.tif')[0]
+
+    # create new name        
+    fname_funct = file_root+'_functional.tif'
+    fname_struct = file_root+'_structural.tif'
+    print("Saving functional output as",fname_funct)
+    print("Saving structural output as",fname_struct)
+
+    # split data
+    structMovie = movie[:,structural_index,:,:]
+    functMovie = movie[:,functional_index,:,:]        
+    imsave(fname_struct,structMovie)  
+    imsave(fname_funct,functMovie) 
+
+    return [fname_funct], [fname_struct], structMovie, functMovie 
 
 # NOT WORKING  
 def miniscope_to_tif(movie_path: str):
@@ -303,6 +446,7 @@ def lazyTiff(movie_path: str):
 
     return movie
 
+# interactively downsample the dataset
 def interactive_downsample(image):
     '''
     Args:
@@ -399,6 +543,7 @@ def stacktiff(tiff_series_path: str, downsample_factor = None):
         print("Finished with image",counter+1,"/",len(pathnames))  
         counter += 1
 
+# TODO: This object can be deprecated
 # downsample_movie provides a class to downsample your dataset
 class modify_movie():
 

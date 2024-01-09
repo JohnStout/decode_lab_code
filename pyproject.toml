@@ -17,6 +17,7 @@ pynapple = "^0.4.0"
 ipykernel = "^6.25.2"
 matplotlib = "^3.8.0"
 colorcet = "3.0.1"
+imageio = "2.33.1"
 
 
 [build-system]
