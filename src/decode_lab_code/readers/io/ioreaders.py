@@ -40,7 +40,7 @@ from decode_lab_code.calcium_imaging.preprocessing_utils import miniscope_to_tif
 from decode_lab_code.utils.indexing_tools import dsearchn
 
 # pyedflib
-from pyedflib import highlevel
+from pyedflib import highlevel, edfwriter, EdfWriter
 
 import matplotlib.pyplot as plt
 
@@ -473,28 +473,73 @@ class neuralynx(base):
 # pinnacle data
 class pinnacle(base):
 
-    def read_edf(self):
+    def read_edf(self, file_name: str):
         '''
         Reads .edf files
             Args:
-                >>> dir: directory with the .edf extension
+                >>> file_name: name of file in the root directory
 
             Returns:
                 signals: signal data
                 signal_headers: header files
         '''
         # this will be a loop
-        #dir_edf = os.path.join(dir)
-        signals, signal_headers, header = highlevel.read_edf(self.folder_path)    
+        dir_edf = os.path.join(self.folder_path,file_name)
+        signals, signal_headers, header = highlevel.read_edf(edf_file=dir_edf)    
+
+        self.signals = signals; self.signal_headers = signal_headers; self.header = header
+        self.history.append['signal: .edf file signal data']
+        self.history.append['signal_headers: header file for signal']
+        self.history.append['header: header file for the recording']
 
     def ncs_to_edf(self):
         pass
 
+#% 
+
+# TODO: Write to edf
+'''
+# load data to understand its format
+folder_path = r'/Users/js0403/edf recording/round1_11_10.edf'
+self = pinnacle(folder_path = folder_path)
+self.read_edf(file_name = 'round1_11_10.edf')
+
+
+# test code
 folder_path = r'/Volumes/decode/Emily/TSC project/Single Unit Recordings/87mTSC1 L4/2024-01-04_09-51-20'
 self = neuralynx(folder_path=folder_path)
 self.read_ncs_file(wire_names = 'CSC1')
 self.read_events()
 self.read_header()
+
+file_name = os.path.join(self.folder_path,'CSC1.edf')
+sample_rate = 32000
+seconds = len(self.csc_data['CSC1.ncs'])/sample_rate
+EdfWriter(file_name = file_name, n_channels=1).writeSamples(data_list = self.csc_data['CSC1.ncs'][0])
+'''
+def trim_edf():
+    file_name = r"17335.0001_0001.edf"
+    sample_rate = 1000
+    seconds = 1
+    ch_nrs = [0]  # Read the first channel
+    signals, signal_headers, header = pyedflib.highlevel.read_edf(file_name, ch_nrs=ch_nrs)
+    # Trim the signal:
+    signals = signals[:, :seconds * sample_rate]  # 2D numpy array of shape (1, 1000)
+    # Modify metadata to fit new signal data
+
+    # Signal headers is the list of dict, each dict corresponds to some channel.
+    # We only want the first channel.
+    new_signal_headers = [signal_headers[0]]
+
+    # Update signal duration(seconds) in the main header.
+    # Main header is a dict of global EDF properties, like start date, duration, patient details etc...
+    new_header = header.copy()
+    new_header['Duration'] = seconds
+
+    # Save modified signal with adjusted metadata as EDF file.
+    pyedflib.highlevel.write_edf('modified_signal.edf', signals=signals, header=new_header,
+                                 signal_headers=new_signal_headers)
+
 
 # miniscope data
 class miniscope(base):
@@ -527,29 +572,3 @@ class olympus(base):
         # split 4D_array
         if split_4D is True:
             split_4D_tif(movie_path = fname)
-
-#%%  some general helper functions for nwb stuff
-
-# TODO: This could be its own function
-def read_movie(movie_name: str):
-
-    """
-    Args:
-        >>> movie_name: name of the movie to load with extension
-
-    John Stout
-    """
-
-    # read movie file
-    movie_path = os.path.join(self.folder_path, movie_name)
-    print("Reading movie from: ", movie_path)
-    cap = cv2.VideoCapture(movie_path) 
-    movie_data = []
-    while(cap.isOpened()):
-        ret, frame = cap.read()
-        if ret is False:
-            break
-        else:
-            movie_data.append(frame[:,:,0]) # only the first array matters
-    movie_mat = np.dstack(movie_data)
-    movie_data = np.moveaxis(movie_mat, -1, 0)

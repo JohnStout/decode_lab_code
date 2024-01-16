@@ -16,6 +16,7 @@ from pynwb import NWBHDF5IO
 from scipy.signal import detrend
 import matplotlib.pyplot as plt
 import imageio
+import cv2
 
 # only works if caiman is environment
 try:
@@ -106,6 +107,134 @@ def mp4_to_tif(movie_path: str):
             next = 1
 
     return fname
+
+# TODO: FINISH
+def wmv_to_tif(movie_path: str, image_idx = None, downsample_factor = None, save_path = None):
+
+    '''
+    Args:
+        >>> movie_path: directory with movie
+        >>> image_idx: index containing your image if known (cv reader pulls in duplicates or blank 3D)
+        >>> downsample_factor: factor by which to spatially reduce your video
+        >>> save_path: path to write your video with '.tif' extension
+    
+    '''
+
+    # load example video
+    if 'vid' in locals():
+        del vid
+    vid = cv2.VideoCapture(movie_path)
+    vid.grab()
+
+    # get image
+    retval, image = vid.retrieve()    
+
+    if image_idx is None:
+        # interface with user
+        fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(10,5))
+        ax[0].imshow(image[::2,::2,0])
+        ax[0].set_title("Dimension 1")
+        ax[1].imshow(image[::2,::2,1])
+        ax[1].set_title("Dimension 2")
+        ax[2].imshow(image[::2,::2,2])
+        ax[2].set_title("Dimension 3")
+        plt.show()
+
+        # require user interface (-1 bc 0 indexing in python)
+        idx_movie = int(input("Enter which dimension [1/2/3] has your data:"))-1
+    else:
+        # make sure this is the correct indexing
+        idx_movie = image_idx
+
+    if downsample_factor is None:
+        # get downsample factor interactively
+        downsample_factor = interactive_downsample(image = image[:,:,idx_movie])
+
+    # run a while loop to extract data
+    images = []
+    next = 0; counter = 0
+
+    # get pixel shape
+    if downsample_factor is None:
+        pixel_shape = image['size']
+    else:
+        pixel_shape = image[::downsample_factor,::downsample_factor,idx_movie].shape
+
+    # get movie length
+    counter = 0; next = 0; del vid
+    # load example video
+    if 'vid' in locals():
+        del vid
+    vid = cv2.VideoCapture(movie_path)
+    while True:
+        vid.grab()
+        retval, image = vid.retrieve()
+
+        if not retval:
+            break
+        else:
+            counter += 1
+
+    # create a memory mappable file
+    if save_path is None:
+
+        # create new name for tif file
+        fname = movie_path.split('.')[0]+'.tif'
+
+    else:
+        file_name = os.path.split(movie_path)[1].split('.')[0]
+        fname = os.path.join(save_path,file_name+'.tif')
+    
+    # write a memory mapped file
+    im = memmap(
+        fname,
+        shape=(counter,pixel_shape[0],pixel_shape[1]),
+        dtype=np.uint16,
+        append=True
+    )
+
+    # TODO: FINISH THIS
+
+    # now we will append to memory mapped file
+    print("Please wait while data is mapped to:",fname)
+    next = 0; counter = 0
+    vid = cv2.VideoCapture(movie_path)
+    while True:
+        # get video
+        vid.grab()
+        retval, image = vid.retrieve()
+        if retval is True:
+            # downsample
+            if downsample_factor is None:
+                im[counter]=image[:,:,idx_movie]
+            else:
+                im[counter]=image[::downsample_factor,::downsample_factor,idx_movie]
+            counter += 1
+        if not retval:
+            break
+
+    #images_new = imread(fname)
+    return fname
+
+# TODO: FINISH
+def batch_to_tif(files_path: str, image_idx = None, downsample_factor = None, save_path = None):
+    '''
+    Write a bunch of files in batch
+    
+    Args:
+        >>> files_path: path with all of your files
+        >>> extension_type: what file type your files are
+    '''
+
+    # get contents
+    dir_contents = sorted(os.listdir(files_path))
+
+    # for loop
+    for vidname in dir_contents:
+        movie_path = os.path.join(files_path,vidname)
+        print(movie_path)
+        if '.wmv' in vidname:
+            fname = wmv_to_tif(movie_path = os.path.join(files_path,vidname), image_idx = image_idx, downsample_factor = downsample_factor, save_path = save_path)
 
 # downsample tif file
 def downsample_tif(movie_path: str):
