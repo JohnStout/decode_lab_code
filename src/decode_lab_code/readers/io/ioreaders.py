@@ -7,7 +7,7 @@
 # written by John Stout
 
 # get some packages
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import tz
 from pathlib import Path
 from uuid import uuid4
@@ -485,12 +485,35 @@ class pinnacle(base):
         '''
         # this will be a loop
         dir_edf = os.path.join(self.folder_path,file_name)
-        signals, signal_headers, header = highlevel.read_edf(edf_file=dir_edf)    
+        signals, signal_headers, header = highlevel.read_edf(edf_file=dir_edf) 
 
-        self.signals = signals; self.signal_headers = signal_headers; self.header = header
-        self.history.append['signal: .edf file signal data']
-        self.history.append['signal_headers: header file for signal']
-        self.history.append['header: header file for the recording']
+        # convert to dictionary
+        signal_dict = dict()
+        for i in range(len(signal_headers)):
+            # estimate recording duration in seconds
+            num_samples = len(signals[i])
+            recording_duration = (num_samples/signal_headers[i]['sample_rate'])
+            start_time = header['startdate']
+            estimated_end_time = start_time+timedelta(seconds=recording_duration)
+            
+            # create timestamps variable
+            start = pd.Timestamp(start_time)
+            end = pd.Timestamp(estimated_end_time)
+            t = np.linspace(start.value, end.value, num_samples)
+            t_datetime = pd.to_datetime(t)
+
+            # build dictionary
+            signal_dict = {'Animal ID': signal_headers[i]['transducer'],
+                           'EEG Label': signal_headers[i]['label'],
+                           'EEG Sampling Rate': signal_headers[i]['sample_rate'],
+                           'Start Time': header['startdate'],
+                           'Estimated End Time': estimated_end_time,
+                           'EEG Signal': signals[i],
+                           'EEG Times (seconds; Aproximated)': t,
+                           'EEG Times (seconds; Approximated; 0-time)': t_datetime}  
+
+        self.signal_data = signal_dict
+        self.history.append['signal_data: dictionary array containing relevant information for EEG analysis']
 
     def ncs_to_edf(self):
         pass
@@ -539,7 +562,6 @@ def trim_edf():
     # Save modified signal with adjusted metadata as EDF file.
     pyedflib.highlevel.write_edf('modified_signal.edf', signals=signals, header=new_header,
                                  signal_headers=new_signal_headers)
-
 
 # miniscope data
 class miniscope(base):

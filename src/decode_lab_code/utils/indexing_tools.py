@@ -1,5 +1,6 @@
 # indexing tools
 import numpy as np
+import pandas as pd
 
 def dsearchn(x, v):
     z=np.atleast_2d(x)-np.atleast_2d(v).T
