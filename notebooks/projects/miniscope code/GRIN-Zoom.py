@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 
 # define movie paths
 fname = '/Users/js0403/miniscope/122A_session2_nwbfile/122A_session2.tif'
-fr = 30
 
 # read movie
 movie_tiff = tifffile.imread(fname)

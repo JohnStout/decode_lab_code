@@ -25,6 +25,10 @@ except:
     print("CaImAn toolbox not loaded. Add to environment if running calcium imaging analysis")
     pass
 
+#% 
+def avi_to_tif(movie_path: str):
+    pass
+
 #% helper functions
 def mp4_to_tif(movie_path: str):
     '''
@@ -448,14 +452,14 @@ def miniscope_to_tif(movie_path: str):
         append=True
     )
 
-    # TODO: THIS IS BUSTED!!!
-
     # now we will append to memory mapped file
     print("Please wait while data is mapped to:",fname)
     counter = 0
     for i in range(len(total_frame_count)):
-        im[counter:total_frame_count[i]*(i+1),:,:] = imread(pathnames[i])
+        im[counter:counter+total_frame_count[i],:,:] = imread(pathnames[i]) 
+        #im[counter:total_frame_count[i]*(i+1),:,:] = imread(pathnames[i])
         counter += total_frame_count[i]
+        print(counter)
         im.flush()
         print("Finished with image",counter+1,"/",len(pathnames))  
 
