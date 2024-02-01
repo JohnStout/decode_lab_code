@@ -27,7 +27,8 @@ except:
 
 #% 
 def avi_to_tif(movie_path: str):
-    pass
+    # redundant
+    miniscope_to_tif(movie_path = movie_path)
 
 #% helper functions
 def mp4_to_tif(movie_path: str):
